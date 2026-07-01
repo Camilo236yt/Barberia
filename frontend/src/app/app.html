@@ -1,0 +1,621 @@
+<div class="branch-access-loading" *ngIf="accessLoading">Consultando barberías disponibles…</div>
+
+<div class="branch-gate" *ngIf="branchPickerOpen && !accessLoading">
+  <div class="branch-gate-card">
+    <div class="brand-mark large">B</div>
+    <span class="eyebrow">{{ adminRole === 'online' ? 'Administrador online' : 'Administrador local' }}</span>
+    <h1>Selecciona tu barbería</h1>
+    <p>La sede tomada por el otro administrador no estará disponible.</p>
+    <div class="branch-options" *ngIf="availableBranches.length; else noAvailableBranch">
+      <button type="button" *ngFor="let branch of availableBranches; trackBy: trackById" (click)="selectBranch(branch.id)">
+        <span class="branch-number">{{ branch.name.slice(-1) }}</span>
+        <span>
+          <strong>{{ branch.name }}</strong>
+          <small>Entrar a administración</small>
+        </span>
+        <span class="arrow">→</span>
+      </button>
+    </div>
+    <ng-template #noAvailableBranch>
+      <div class="empty-state">Esperando que la otra administración libere una barbería.</div>
+    </ng-template>
+    <p class="form-message error" *ngIf="accessError">{{ accessError }}</p>
+    <small class="host-note">
+      {{ adminRole === 'online' ? 'Conectado mediante el enlace administrativo seguro.' : 'Conectado desde la computadora principal.' }}
+    </small>
+  </div>
+</div>
+
+<div class="admin-shell" *ngIf="activeBranchId && !branchPickerOpen">
+    <aside class="admin-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark">B</div>
+        <div>
+          <span>Administración</span>
+          <strong>Barbería Control</strong>
+        </div>
+      </div>
+
+      <button class="branch-switcher" type="button" (click)="openBranchPicker()">
+        <span class="branch-dot"></span>
+        <span>
+          <small>{{ adminRole === 'online' ? 'Acceso online' : 'Acceso local' }}</small>
+          <strong>{{ activeBranch()?.name }}</strong>
+        </span>
+        <span>⌄</span>
+      </button>
+
+      <nav class="sidebar-nav" aria-label="Módulos administrativos">
+        <span class="nav-group">Operación</span>
+        <button type="button" [class.active]="selectedView === 'dashboard'" (click)="setView('dashboard')">
+          <span class="nav-icon">⌂</span> Principal
+        </button>
+        <button type="button" [class.active]="selectedView === 'sales'" (click)="setView('sales')">
+          <span class="nav-icon">＋</span> Facturar corte
+        </button>
+        <span class="nav-group">Control</span>
+        <button type="button" [class.active]="selectedView === 'accounting'" (click)="setView('accounting')">
+          <span class="nav-icon">$</span> Contabilidad
+        </button>
+        <button type="button" [class.active]="selectedView === 'history'" (click)="setView('history')">
+          <span class="nav-icon">↻</span> Historial
+        </button>
+        <span class="nav-group">Configuración</span>
+        <button type="button" [class.active]="selectedView === 'information'" (click)="setView('information')">
+          <span class="nav-icon">i</span> Información
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="connection-dot" [class.online]="realtimeConnected"></span>
+        <span>
+          <strong>{{ realtimeConnected ? 'Sincronizado' : 'Reconectando' }}</strong>
+          <small>{{ adminRole === 'online' ? 'Administrador online' : 'Servidor principal' }}</small>
+        </span>
+      </div>
+    </aside>
+
+    <main class="admin-content">
+      <header class="content-header">
+        <div>
+          <span class="eyebrow">{{ activeBranch()?.name }}</span>
+          <h1>
+            <ng-container [ngSwitch]="selectedView">
+              <span *ngSwitchCase="'dashboard'">Resumen principal</span>
+              <span *ngSwitchCase="'sales'">Facturar corte</span>
+              <span *ngSwitchCase="'accounting'">Contabilidad de la sede</span>
+              <span *ngSwitchCase="'history'">Historial de la sede</span>
+              <span *ngSwitchCase="'information'">Información y precios</span>
+            </ng-container>
+          </h1>
+        </div>
+        <div class="header-actions">
+          <span class="date-chip">{{ todayKey() }}</span>
+          <button class="quick-sale" type="button" (click)="setView('sales')">+ Nueva venta</button>
+        </div>
+      </header>
+
+      <section class="view active" *ngIf="selectedView === 'dashboard'">
+        <div class="kpi-row">
+          <article class="kpi-card accent">
+            <span>Ventas de hoy</span>
+            <strong>{{ formatMoney(totalConfirmed()) }}</strong>
+            <small>{{ confirmedSales().length }} cortes confirmados</small>
+          </article>
+          <article class="kpi-card">
+            <span>Efectivo</span>
+            <strong>{{ formatMoney(expectedCash()) }}</strong>
+            <small>Esperado en caja</small>
+          </article>
+          <article class="kpi-card">
+            <span>Nequi</span>
+            <strong>{{ formatMoney(nequiConfirmed()) }}</strong>
+            <small>{{ pendingTodayCount() }} pagos pendientes</small>
+          </article>
+          <article class="kpi-card">
+            <span>Estado de caja</span>
+            <strong>{{ isCurrentDayClosed() ? 'Cerrada' : 'Abierta' }}</strong>
+            <small>Acceso fijado a {{ activeBranch()?.name }}</small>
+          </article>
+        </div>
+
+        <div class="dashboard-grid">
+          <section class="tool-panel chart-panel wide-chart">
+            <div class="panel-heading">
+              <div>
+                <p>Rendimiento</p>
+                <h2>Ventas de los últimos 7 días</h2>
+              </div>
+              <span class="status-pill online">En vivo</span>
+            </div>
+            <div class="bar-chart">
+              <div class="bar-column" *ngFor="let point of weeklyChart(); trackBy: trackByKey">
+                <span class="bar-value">{{ point.value ? formatMoney(point.value) : '—' }}</span>
+                <div class="bar-track"><span [style.height.%]="point.percent"></span></div>
+                <strong>{{ point.label }}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="tool-panel chart-panel">
+            <div class="panel-heading">
+              <div>
+                <p>Hoy</p>
+                <h2>Servicios realizados</h2>
+              </div>
+            </div>
+            <div class="horizontal-chart" *ngIf="confirmedSales().length; else noServicesToday">
+              <div *ngFor="let point of serviceChart(); trackBy: trackByKey">
+                <span><strong>{{ point.label }}</strong><small>{{ point.value }}</small></span>
+                <div><i [style.width.%]="point.percent"></i></div>
+              </div>
+            </div>
+            <ng-template #noServicesToday><div class="empty-state">Aún no hay ventas hoy</div></ng-template>
+          </section>
+
+          <section class="tool-panel chart-panel">
+            <div class="panel-heading">
+              <div>
+                <p>Equipo</p>
+                <h2>Producción por barbero</h2>
+              </div>
+            </div>
+            <div class="barber-ranking">
+              <div *ngFor="let barber of barbers; trackBy: trackById">
+                <span class="avatar">{{ barber.name.charAt(0) }}</span>
+                <span><strong>{{ barber.name }}</strong><small>{{ barberCount(barber.id) }} cortes</small></span>
+                <strong>{{ formatMoney(barberTotal(barber.id)) }}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="tool-panel recent-panel">
+            <div class="panel-heading">
+              <div>
+                <p>Últimos movimientos</p>
+                <h2>Actividad de la sede</h2>
+              </div>
+              <button class="text-button" type="button" (click)="setView('accounting')">Ver todo</button>
+            </div>
+            <div class="activity-list" *ngIf="branchSales().length; else noDashboardSales">
+              <article class="activity-item" *ngFor="let sale of branchSales().slice(0, 5); trackBy: trackById">
+                <div>
+                  <strong>{{ sale.service_name }}</strong>
+                  <span class="sale-meta">{{ sale.barber_name }} · {{ timeOnly(sale.created_at) }}</span>
+                </div>
+                <span class="payment-tag" [class.cash]="sale.payment_method === 'cash'" [class.nequi]="sale.payment_method === 'nequi'">
+                  {{ paymentLabel(sale.payment_method) }}
+                </span>
+                <strong>{{ formatMoney(sale.amount) }}</strong>
+              </article>
+            </div>
+            <ng-template #noDashboardSales><div class="empty-state">Sin movimientos en esta sede</div></ng-template>
+          </section>
+        </div>
+      </section>
+
+      <section class="view active" *ngIf="selectedView === 'sales'">
+        <div class="work-grid">
+          <form class="tool-panel sale-form" (ngSubmit)="submitSale()">
+            <div class="panel-heading">
+              <div>
+                <p>Registro administrativo</p>
+                <h2>Nuevo corte · {{ activeBranch()?.name }}</h2>
+              </div>
+              <span class="status-pill" [class.closed]="isCurrentDayClosed()" [class.online]="!isCurrentDayClosed()">
+                {{ isCurrentDayClosed() ? 'Caja cerrada' : 'Caja abierta' }}
+              </span>
+            </div>
+
+            <div *ngIf="isCurrentDayClosed()" class="lock-banner">La caja está cerrada. Reábrela desde Contabilidad.</div>
+            <fieldset [disabled]="isCurrentDayClosed()">
+              <label class="field">
+                <span>Barbero que realizó el servicio</span>
+                <select name="barber" [(ngModel)]="saleForm.barber_id" required>
+                  <option *ngFor="let barber of barbers; trackBy: trackById" [value]="barber.id">{{ barber.name }}</option>
+                </select>
+              </label>
+
+              <div class="field">
+                <span>Servicio</span>
+                <div class="service-grid">
+                  <button
+                    *ngFor="let service of services; trackBy: trackById"
+                    class="service-button"
+                    [class.active]="selectedServiceId === service.id"
+                    type="button"
+                    (click)="selectService(service)"
+                  >
+                    <strong>{{ service.name }}</strong>
+                    <span>{{ formatMoney(service.price) }}</span>
+                  </button>
+                  <button
+                    class="service-button special-service-button"
+                    [class.active]="isSpecialService"
+                    type="button"
+                    (click)="selectSpecialService()"
+                  >
+                    <strong>Servicio especial</strong>
+                    <span>Nombre y precio libre</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="special-service-panel" *ngIf="isSpecialService">
+                <div>
+                  <span class="special-badge">Oferta / precio especial</span>
+                  <strong>Personaliza esta venta</strong>
+                </div>
+                <label class="field">
+                  <span>Nombre del servicio</span>
+                  <input
+                    name="specialServiceName"
+                    type="text"
+                    maxlength="60"
+                    placeholder="Ej. Corte especial"
+                    [(ngModel)]="specialServiceName"
+                    required
+                  >
+                </label>
+              </div>
+
+              <div class="two-cols">
+                <label class="field">
+                  <span>{{ isSpecialService ? 'Precio especial' : 'Valor cobrado' }}</span>
+                  <input name="amount" type="number" min="1" step="1000" [(ngModel)]="saleForm.amount" required>
+                </label>
+                <label class="field">
+                  <span>Cliente (opcional)</span>
+                  <input name="client" type="text" [(ngModel)]="saleForm.client_name">
+                </label>
+              </div>
+
+              <div class="field">
+                <span>Método de pago</span>
+                <div class="segmented">
+                  <button class="segment" [class.active]="selectedPayment === 'cash'" type="button" (click)="setPayment('cash')">Efectivo</button>
+                  <button class="segment" [class.active]="selectedPayment === 'nequi'" type="button" (click)="setPayment('nequi')">Nequi</button>
+                </div>
+              </div>
+
+              <div class="proof-panel" *ngIf="selectedPayment === 'nequi'">
+                <div class="proof-actions">
+                  <label class="secondary-button file-button">Tomar foto<input class="file-input" type="file" accept="image/*" capture="environment" (change)="handleProofFile($event)"></label>
+                  <label class="secondary-button file-button">Galería<input class="file-input" type="file" accept="image/*" (change)="handleProofFile($event)"></label>
+                </div>
+                <div class="proof-preview">
+                  <img *ngIf="proofPreviewUrl; else emptyProof" [src]="proofPreviewUrl" alt="Comprobante">
+                  <ng-template #emptyProof><span>Comprobante Nequi</span></ng-template>
+                </div>
+                <label class="field">
+                  <span>Referencia</span>
+                  <input name="proofNote" type="text" [(ngModel)]="saleForm.proof_note">
+                </label>
+              </div>
+
+              <button class="primary-button" type="submit">Guardar venta en {{ activeBranch()?.name }}</button>
+            </fieldset>
+            <p class="form-message" [class.success]="saleMessageType === 'success'" [class.error]="saleMessageType === 'error'">{{ saleMessage }}</p>
+          </form>
+
+          <aside class="side-panel">
+            <div class="panel-heading">
+              <div><p>Resumen del turno</p><h2>{{ selectedBarber()?.name }}</h2></div>
+              <strong>{{ formatMoney(selectedBarberTotal()) }}</strong>
+            </div>
+            <div class="mini-stats">
+              <div><span>Cortes</span><strong>{{ selectedBarberSales().length }}</strong></div>
+              <div><span>Efectivo</span><strong>{{ formatMoney(selectedBarberCash()) }}</strong></div>
+              <div><span>Nequi</span><strong>{{ formatMoney(selectedBarberNequi()) }}</strong></div>
+            </div>
+            <div class="activity-list" *ngIf="selectedBarberSales().length; else noBarberSales">
+              <article class="activity-item compact" *ngFor="let sale of selectedBarberSales().slice(0, 8); trackBy: trackById">
+                <div><strong>{{ sale.service_name }}</strong><span class="sale-meta">{{ timeOnly(sale.created_at) }}</span></div>
+                <strong>{{ formatMoney(sale.amount) }}</strong>
+              </article>
+            </div>
+            <ng-template #noBarberSales><div class="empty-state">Sin ventas hoy</div></ng-template>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view active" *ngIf="selectedView === 'accounting'">
+        <section class="tool-panel accounting-calendar-panel">
+          <div class="calendar-header">
+            <div>
+              <p class="calendar-eyebrow">Buscar movimientos por fecha</p>
+              <h2>{{ accountingMonthLabel() }}</h2>
+            </div>
+            <div class="calendar-navigation">
+              <button type="button" aria-label="Mes anterior" (click)="changeAccountingMonth(-1)">←</button>
+              <button type="button" (click)="accountingMonthKey = todayKey().slice(0, 7); selectAccountingDate(todayKey())">Hoy</button>
+              <button type="button" aria-label="Mes siguiente" (click)="changeAccountingMonth(1)">→</button>
+            </div>
+          </div>
+
+          <div class="calendar-legend">
+            <span><i class="legend-dot billed"></i> Con facturación</span>
+            <span><i class="legend-dot empty"></i> Sin facturación</span>
+            <span><i class="legend-dot future"></i> Día futuro</span>
+          </div>
+
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+          </div>
+          <div class="accounting-calendar">
+            <button
+              *ngFor="let day of accountingCalendarDays(); trackBy: trackByKey"
+              type="button"
+              [disabled]="!day.inMonth || day.isFuture"
+              [class.blank]="!day.inMonth"
+              [class.billed]="day.inMonth && day.hasSales"
+              [class.empty]="day.inMonth && !day.hasSales && !day.isFuture"
+              [class.future]="day.isFuture"
+              [class.selected]="day.key === accountingDate"
+              (click)="day.inMonth && !day.isFuture && selectAccountingDate(day.key)"
+            >
+              <span *ngIf="day.inMonth">{{ day.day }}</span>
+            </button>
+          </div>
+        </section>
+
+        <div class="selected-accounting-day">
+          <span>Movimientos del día</span>
+          <strong>{{ accountingDate }}</strong>
+        </div>
+
+        <div class="kpi-row">
+          <article class="kpi-card"><span>Total confirmado</span><strong>{{ formatMoney(accountingTotal()) }}</strong><small>{{ accountingDate }}</small></article>
+          <article class="kpi-card"><span>Efectivo</span><strong>{{ formatMoney(accountingCash()) }}</strong><small>Ventas del día elegido</small></article>
+          <article class="kpi-card"><span>Nequi confirmado</span><strong>{{ formatMoney(accountingNequi()) }}</strong><small>Pagos aprobados</small></article>
+          <article class="kpi-card"><span>Nequi pendiente</span><strong>{{ formatMoney(accountingPendingTotal()) }}</strong><small>{{ accountingPendingSales().length }} por revisar</small></article>
+        </div>
+
+        <div class="accounting-grid">
+          <section class="tool-panel">
+            <div class="panel-heading">
+              <div><p>Caja de hoy · {{ todayKey() }}</p><h2>Cierre de {{ activeBranch()?.name }}</h2></div>
+              <span class="status-pill" [class.closed]="isCurrentDayClosed()" [class.online]="!isCurrentDayClosed()">
+                {{ isCurrentDayClosed() ? 'Cerrada' : 'Abierta' }}
+              </span>
+            </div>
+            <label class="field">
+              <span>Efectivo contado</span>
+              <input type="number" min="0" step="1000" [(ngModel)]="countedCash" [disabled]="isCurrentDayClosed()">
+            </label>
+            <div class="cash-diff" [class.negative]="cashDifference() < 0" [class.positive]="cashDifference() > 0">
+              Diferencia: {{ formatMoney(cashDifference()) }}
+            </div>
+            <div class="day-actions">
+              <button class="primary-button" type="button" *ngIf="!isCurrentDayClosed()" (click)="closeDay()">Cerrar caja de esta sede</button>
+              <button class="secondary-button" type="button" *ngIf="isCurrentDayClosed()" (click)="reopenDay()">Reabrir caja</button>
+            </div>
+            <p class="form-message" [class.success]="closeMessageType === 'success'" [class.error]="closeMessageType === 'error'">{{ closeMessage }}</p>
+          </section>
+
+          <section class="tool-panel">
+            <div class="panel-heading">
+              <div><p>Pagos digitales</p><h2>Revisión Nequi</h2></div>
+              <span class="status-pill">{{ accountingPendingSales().length }} pendientes</span>
+            </div>
+            <div class="review-list" *ngIf="accountingPendingSales().length; else noPending">
+              <article class="review-item" *ngFor="let sale of accountingPendingSales(); trackBy: trackById">
+                <div class="review-top">
+                  <div><strong>{{ sale.barber_name }} · {{ sale.service_name }}</strong><span class="sale-meta">{{ formatMoney(sale.amount) }}</span></div>
+                  <span class="state-tag pending_review">Pendiente</span>
+                </div>
+                <div class="review-proof">
+                  <a *ngIf="sale.proof_url" [href]="sale.proof_url" target="_blank" rel="noopener"><img [src]="sale.proof_url" alt="Comprobante Nequi"></a>
+                  <div>
+                    <span class="sale-meta">Referencia: {{ sale.proof_note || 'Sin referencia' }}</span>
+                    <div class="review-actions">
+                      <button class="small-button approve" type="button" (click)="updateSaleStatus(sale.id, 'confirmed')">Confirmar</button>
+                      <button class="small-button reject" type="button" (click)="updateSaleStatus(sale.id, 'rejected')">Rechazar</button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+            <ng-template #noPending><div class="empty-state">Sin pagos pendientes en este día</div></ng-template>
+          </section>
+
+          <section class="tool-panel full-span">
+            <div class="panel-heading">
+              <div><p>Movimientos diarios</p><h2>{{ accountingDate }} · {{ activeBranch()?.name }}</h2></div>
+              <span class="status-pill">{{ accountingSales().length }} registros</span>
+            </div>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: accountingSales(), showBranch: false }"></ng-container>
+          </section>
+
+          <section class="tool-panel full-span">
+            <div class="panel-heading"><div><p>Comisiones · {{ accountingDate }}</p><h2>Producción del equipo</h2></div></div>
+            <div class="barber-totals">
+              <article class="barber-total-card" *ngFor="let barber of barbers; trackBy: trackById">
+                <span>{{ barber.name }}</span>
+                <strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong>
+                <small>{{ accountingBarberCount(barber.id) }} cortes · Comisión {{ formatMoney(accountingBarberCommission(barber.id)) }}</small>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view active" *ngIf="selectedView === 'history'">
+        <div class="host-banner">
+          <span class="host-icon">H</span>
+          <div><strong>Historial de {{ activeBranch()?.name }}</strong><span>Este acceso no muestra información de la otra barbería.</span></div>
+          <span class="status-pill online">{{ adminRole === 'online' ? 'Online' : 'Servidor' }}</span>
+        </div>
+
+        <div class="history-layout">
+          <section class="tool-panel history-list-panel">
+            <div class="panel-heading">
+              <div><p>{{ activeBranch()?.name }}</p><h2>Aperturas y cierres</h2></div>
+              <span class="status-pill">{{ orderedClosures().length }} registros</span>
+            </div>
+            <div class="closure-list" *ngIf="orderedClosures().length; else noClosures">
+              <article
+                class="closure-item"
+                [class.selected]="examinedDate === closure.date && examinedBranchId === closure.branch_id"
+                *ngFor="let closure of orderedClosures(); trackBy: trackById"
+              >
+                <div class="closure-top">
+                  <div>
+                    <span class="branch-label">{{ closure.branch_name }}</span>
+                    <strong>{{ closure.date }}</strong>
+                    <span class="sale-meta">{{ closure.sales_count }} ventas · {{ formatMoney(closure.total_confirmed) }}</span>
+                  </div>
+                  <span class="state-tag" [class.closed]="closure.status === 'closed'" [class.reopened]="closure.status === 'reopened'">{{ statusLabel(closure.status) }}</span>
+                </div>
+                <button class="secondary-button inspect-button" type="button" (click)="selectExaminedClosure(closure)">Examinar día</button>
+              </article>
+            </div>
+            <ng-template #noClosures><div class="empty-state">Todavía no hay cierres guardados</div></ng-template>
+          </section>
+
+          <section class="tool-panel history-detail" *ngIf="examinedDate; else chooseClosure">
+            <div class="panel-heading">
+              <div><p>{{ branchName(examinedBranchId) }}</p><h2>{{ examinedDate }}</h2></div>
+              <span class="status-pill">{{ examinedSales().length }} ventas</span>
+            </div>
+            <div class="closure-grid">
+              <div><span>Total</span><strong>{{ formatMoney(dayTotal(examinedDate)) }}</strong></div>
+              <div><span>Efectivo</span><strong>{{ formatMoney(dayCash(examinedDate)) }}</strong></div>
+              <div><span>Nequi</span><strong>{{ formatMoney(dayNequi(examinedDate)) }}</strong></div>
+              <div><span>Pendientes</span><strong>{{ dayPendingNequi(examinedDate) }}</strong></div>
+              <div><span>Ventas</span><strong>{{ examinedSales().length }}</strong></div>
+              <div><span>Comprobantes</span><strong>{{ examinedNequiSales().length }}</strong></div>
+            </div>
+            <div class="closure-barbers" *ngIf="selectedClosureBarbers().length">
+              <span *ngFor="let barber of selectedClosureBarbers()">{{ barber.barber_name }}: {{ formatMoney(barber.total) }} · comisión {{ formatMoney(barber.commission) }}</span>
+            </div>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedSales(), showBranch: false }"></ng-container>
+          </section>
+          <ng-template #chooseClosure><section class="tool-panel history-detail empty-history"><div class="empty-state">Selecciona un cierre para ver su contabilidad completa</div></section></ng-template>
+        </div>
+      </section>
+
+      <section class="view active" *ngIf="selectedView === 'information'">
+        <div class="information-intro">
+          <div>
+            <span class="eyebrow">Configuración general</span>
+            <h2>Barberos, servicios y precios</h2>
+            <p>Los cambios se aplican a las nuevas ventas. El historial anterior conserva sus datos originales.</p>
+          </div>
+          <span class="status-pill online">{{ barbers.length }} barberos · {{ services.length }} servicios</span>
+        </div>
+
+        <p class="form-message info-feedback" [class.success]="infoMessageType === 'success'" [class.error]="infoMessageType === 'error'">
+          {{ infoMessage }}
+        </p>
+
+        <div class="information-grid">
+          <section class="tool-panel">
+            <div class="panel-heading">
+              <div>
+                <p>Equipo</p>
+                <h2>Nombres de barberos</h2>
+              </div>
+            </div>
+
+            <form class="create-info-form" (ngSubmit)="createBarber()">
+              <label class="field">
+                <span>Nuevo barbero</span>
+                <input name="newBarberName" type="text" maxlength="60" placeholder="Nombre completo" [(ngModel)]="newBarberName" required>
+              </label>
+              <button class="primary-button" type="submit">Agregar barbero</button>
+            </form>
+
+            <div class="editable-list">
+              <article class="editable-row" *ngFor="let barber of barbers; trackBy: trackById">
+                <span class="avatar">{{ barber.name.charAt(0) }}</span>
+                <label class="field">
+                  <span>Nombre</span>
+                  <input type="text" maxlength="60" [(ngModel)]="barber.name">
+                </label>
+                <div class="editable-actions">
+                  <button class="small-button approve" type="button" (click)="updateBarber(barber)">Guardar</button>
+                  <button class="small-button reject" type="button" (click)="deleteBarber(barber)">Eliminar</button>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="tool-panel">
+            <div class="panel-heading">
+              <div>
+                <p>Catálogo</p>
+                <h2>Servicios y precios</h2>
+              </div>
+            </div>
+
+            <form class="create-info-form service-create-form" (ngSubmit)="createService()">
+              <label class="field">
+                <span>Nuevo servicio</span>
+                <input name="newServiceName" type="text" maxlength="60" placeholder="Ej. Corte clásico" [(ngModel)]="newService.name" required>
+              </label>
+              <label class="field">
+                <span>Precio</span>
+                <input name="newServicePrice" type="number" min="1" step="1000" inputmode="numeric" [(ngModel)]="newService.price" required>
+              </label>
+              <button class="primary-button" type="submit">Agregar servicio</button>
+            </form>
+
+            <div class="editable-list">
+              <article class="editable-row service-row" *ngFor="let service of services; trackBy: trackById">
+                <span class="price-icon">$</span>
+                <label class="field">
+                  <span>Servicio</span>
+                  <input type="text" maxlength="60" [(ngModel)]="service.name">
+                </label>
+                <label class="field price-field">
+                  <span>Precio</span>
+                  <input type="number" min="1" step="1000" inputmode="numeric" [(ngModel)]="service.price">
+                </label>
+                <div class="editable-actions">
+                  <button class="small-button approve" type="button" (click)="updateService(service)">Guardar</button>
+                  <button class="small-button reject" type="button" (click)="deleteService(service)">Eliminar</button>
+                </div>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+<ng-template #salesTable let-salesList="salesList" let-showBranch="showBranch">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha / hora</th>
+          <th *ngIf="showBranch">Sede</th>
+          <th>Barbero</th>
+          <th>Servicio</th>
+          <th>Pago</th>
+          <th>Valor</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let sale of salesList; trackBy: trackById">
+          <td>{{ saleDay(sale) }} · {{ timeOnly(sale.created_at) }}</td>
+          <td *ngIf="showBranch">{{ sale.branch_name }}</td>
+          <td>{{ sale.barber_name }}</td>
+          <td>{{ sale.service_name }}</td>
+          <td>
+            <a *ngIf="sale.proof_url" [href]="sale.proof_url" target="_blank" rel="noopener">
+              <span class="payment-tag" [class.cash]="sale.payment_method === 'cash'" [class.nequi]="sale.payment_method === 'nequi'">{{ paymentLabel(sale.payment_method) }}</span>
+            </a>
+            <span *ngIf="!sale.proof_url" class="payment-tag cash">{{ paymentLabel(sale.payment_method) }}</span>
+          </td>
+          <td>{{ formatMoney(sale.amount) }}</td>
+          <td><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
+        </tr>
+        <tr *ngIf="!salesList.length"><td colspan="7">Sin ventas registradas</td></tr>
+      </tbody>
+    </table>
+  </div>
+</ng-template>

@@ -1,0 +1,37 @@
+[Barberia] Usando Python 3.13.14
+[Barberia] Validando servidor...
+[Barberia] Arrancando servidor local...
+
+========================================
+SERVIDOR ACTIVO
+PID: 15516
+
+Admin/laptop:
+http://localhost:8000/admin
+
+Barberos por internet/datos moviles:
+Se creara un puente HTTPS publico y se guardaran los links de barberos/clientes.
+
+Prueba local Wi-Fi (no compartir para datos moviles):
+http://192.168.1.75:8000/barberos
+
+El archivo de link para barberos queda reservado para el link publico:
+C:\Users\Chiqui-PC V2\OneDrive\Barberia\LINK_BARBEROS.txt
+C:\Users\Chiqui-PC V2\OneDrive\Barberia\LINK_CLIENTES.txt
+========================================
+
+[Barberia] Usando ngrok version 3.39.8
+[Barberia] Creando puente fijo ngrok...
+
+LINK FIJO BARBEROS:
+https://kimono-punch-diving.ngrok-free.dev/barberos
+
+LINK CLIENTES:
+https://kimono-punch-diving.ngrok-free.dev/citas
+
+Este link solo funciona mientras esta ventana y el servidor esten abiertos.
+
+Tambien quedo guardado y copiado desde:
+C:\Users\Chiqui-PC V2\OneDrive\Barberia\LINK_BARBEROS.txt
+C:\Users\Chiqui-PC V2\OneDrive\Barberia\LINK_CLIENTES.txt
+

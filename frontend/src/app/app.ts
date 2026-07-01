@@ -1,0 +1,991 @@
+import { CommonModule } from '@angular/common';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+
+type PaymentMethod = 'cash' | 'nequi';
+type SaleStatus = 'confirmed' | 'pending_review' | 'rejected' | 'annulled';
+type ClosureStatus = 'closed' | 'reopened';
+type ViewName = 'dashboard' | 'sales' | 'accounting' | 'history' | 'information';
+
+interface Branch {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+interface Barber {
+  id: string;
+  name: string;
+  active: boolean;
+  branch_id: string;
+}
+
+interface ServiceItem {
+  id: string;
+  name: string;
+  price: number;
+  branch_id: string;
+}
+
+interface Sale {
+  id: string;
+  created_at: string;
+  branch_id: string;
+  branch_name: string;
+  barber_id: string;
+  barber_name: string;
+  service_id: string;
+  service_name: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  proof_url?: string | null;
+  proof_note: string;
+  client_name: string;
+  status: SaleStatus;
+  reviewed_at?: string;
+}
+
+interface ClosureBarber {
+  barber_id: string;
+  barber_name: string;
+  sales_count: number;
+  total: number;
+  commission: number;
+}
+
+interface ClosureEvent {
+  type: 'closed' | 'reopened';
+  at: string;
+  counted_cash?: number;
+  expected_cash?: number;
+  cash_difference?: number;
+  total_confirmed?: number;
+  cash_total?: number;
+  nequi_confirmed?: number;
+  sales_count?: number;
+}
+
+interface Closure {
+  id: string;
+  date: string;
+  branch_id: string;
+  branch_name: string;
+  closed_at: string;
+  status: ClosureStatus;
+  counted_cash: number;
+  expected_cash: number;
+  cash_difference: number;
+  total_confirmed: number;
+  cash_total: number;
+  nequi_confirmed: number;
+  nequi_pending: number;
+  sales_count: number;
+  pending_nequi_count: number;
+  commission_rate: number;
+  barbers: ClosureBarber[];
+  events?: ClosureEvent[];
+  reopened_at?: string;
+}
+
+interface BootstrapResponse {
+  branches: Branch[];
+  barbers: Barber[];
+  services: ServiceItem[];
+  sales?: Sale[];
+  closures?: Closure[];
+  settings: {
+    commission_rate: number;
+    currency: string;
+    business_whatsapp_country_code: string;
+  };
+}
+
+interface AdminOptionsResponse {
+  role: 'local' | 'online';
+  selected_branch_id: string | null;
+  occupied_branch_id: string | null;
+  branches: Branch[];
+}
+
+interface ChartPoint {
+  key: string;
+  label: string;
+  value: number;
+  percent: number;
+}
+
+interface CalendarDay {
+  key: string;
+  day: number;
+  inMonth: boolean;
+  hasSales: boolean;
+  isFuture: boolean;
+}
+
+@Component({
+  selector: 'app-root',
+  imports: [CommonModule, FormsModule],
+  templateUrl: './app.html',
+  styleUrl: './app.css',
+})
+export class App implements OnInit, OnDestroy {
+  branches: Branch[] = [];
+  barbers: Barber[] = [];
+  services: ServiceItem[] = [];
+  sales: Sale[] = [];
+  closures: Closure[] = [];
+  settings = {
+    commission_rate: 0.5,
+    currency: 'COP',
+    business_whatsapp_country_code: '57',
+  };
+
+  selectedView: ViewName = 'dashboard';
+  isOnline = false;
+  realtimeConnected = false;
+  adminRole: 'local' | 'online' = 'local';
+  adminToken = '';
+  activeBranchId = '';
+  availableBranches: Branch[] = [];
+  branchPickerOpen = true;
+  accessLoading = true;
+  accessError = '';
+
+  selectedServiceId = '';
+  isSpecialService = false;
+  specialServiceName = '';
+  selectedPayment: PaymentMethod = 'cash';
+  proofDataUrl = '';
+  proofPreviewUrl = '';
+  countedCash = 0;
+  examinedDate = '';
+  examinedBranchId = '';
+  accountingDate = this.todayKey();
+  accountingMonthKey = this.todayKey().slice(0, 7);
+
+  saleForm = {
+    barber_id: '',
+    amount: 0,
+    client_name: '',
+    proof_note: '',
+  };
+
+  newBarberName = '';
+  newService = {
+    name: '',
+    price: 0,
+  };
+
+  saleMessage = '';
+  saleMessageType: 'success' | 'error' | '' = '';
+  closeMessage = '';
+  closeMessageType: 'success' | 'error' | '' = '';
+  infoMessage = '';
+  infoMessageType: 'success' | 'error' | '' = '';
+  private refreshTimer?: number;
+  private eventSource?: EventSource;
+  private messageTimers: number[] = [];
+  private destroyed = false;
+
+  constructor(private readonly changeDetector: ChangeDetectorRef) {}
+
+  ngOnInit(): void {
+    this.detectPortalMode();
+    this.loadAdminOptions();
+    this.connectRealtime();
+    this.refreshTimer = window.setInterval(() => {
+      if (this.activeBranchId) this.loadData(true);
+      else this.loadAdminOptions(true);
+    }, 30000);
+  }
+
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    if (this.refreshTimer) window.clearInterval(this.refreshTimer);
+    this.eventSource?.close();
+    this.messageTimers.forEach((timer) => window.clearTimeout(timer));
+  }
+
+  detectPortalMode(): void {
+    const path = window.location.pathname.toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    this.adminRole = path.startsWith('/admin/online') ? 'online' : 'local';
+    this.adminToken = this.adminRole === 'online' ? params.get('token') || '' : '';
+    this.selectedView = 'dashboard';
+  }
+
+  async loadAdminOptions(silent = false, keepPickerOpen = false): Promise<void> {
+    try {
+      const options = await this.api<AdminOptionsResponse>('/api/admin/options');
+      this.adminRole = options.role;
+      this.availableBranches = options.branches || [];
+      this.accessError = '';
+      if (options.selected_branch_id && !keepPickerOpen) {
+        this.activeBranchId = options.selected_branch_id;
+        this.branchPickerOpen = false;
+        await this.loadData(true);
+      }
+    } catch (error) {
+      if (!silent) this.accessError = this.errorMessage(error);
+    } finally {
+      this.accessLoading = false;
+      this.renderNow();
+    }
+  }
+
+  async selectBranch(branchId: string): Promise<void> {
+    try {
+      const result = await this.api<{ branch: Branch }>('/api/admin/select-branch', {
+        method: 'POST',
+        body: JSON.stringify({ branch_id: branchId }),
+      });
+      this.activeBranchId = result.branch.id;
+      this.branchPickerOpen = false;
+      this.examinedDate = '';
+      this.examinedBranchId = branchId;
+      this.countedCash = 0;
+      await this.loadData(true);
+    } catch (error) {
+      this.accessError = this.errorMessage(error);
+      await this.loadAdminOptions(true);
+    }
+  }
+
+  async openBranchPicker(): Promise<void> {
+    this.branchPickerOpen = true;
+    this.accessLoading = true;
+    await this.loadAdminOptions(true, true);
+  }
+
+  async loadData(silent = false): Promise<void> {
+    if (!this.activeBranchId) return;
+    try {
+      const data = await this.api<BootstrapResponse>('/api/bootstrap');
+      this.branches = (data.branches || []).filter((branch) => branch.active !== false);
+      this.barbers = data.barbers || [];
+      this.services = data.services || [];
+      this.sales = data.sales || [];
+      this.closures = data.closures || [];
+      this.settings = data.settings || this.settings;
+      this.ensureDefaults();
+      const currentClosure = this.currentClosure();
+      if (currentClosure?.status === 'closed') this.countedCash = currentClosure.counted_cash;
+      if (!this.examinedDate) {
+        const latestClosure = this.orderedClosures()[0];
+        this.examinedDate = latestClosure?.date || '';
+        this.examinedBranchId = this.activeBranchId;
+      }
+      this.isOnline = true;
+    } catch (error) {
+      this.isOnline = false;
+      if (!silent) this.showSaleMessage(this.errorMessage(error), 'error');
+    } finally {
+      this.renderNow();
+    }
+  }
+
+  ensureDefaults(): void {
+    if (!this.barbers.some((barber) => barber.id === this.saleForm.barber_id)) {
+      this.saleForm.barber_id = this.barbers[0]?.id || '';
+    }
+    if (!this.isSpecialService && !this.services.some((service) => service.id === this.selectedServiceId)) {
+      this.selectedServiceId = '';
+      if (this.services.length) this.selectService(this.services[0]);
+    }
+  }
+
+  setView(view: ViewName): void {
+    this.selectedView = view;
+  }
+
+  activeBranch(): Branch | undefined {
+    return this.branches.find((branch) => branch.id === this.activeBranchId);
+  }
+
+  branchName(branchId: string): string {
+    return this.branches.find((branch) => branch.id === branchId)?.name || 'Barbería';
+  }
+
+  selectService(service: ServiceItem): void {
+    this.isSpecialService = false;
+    this.specialServiceName = '';
+    this.selectedServiceId = service.id;
+    this.saleForm.amount = service.price;
+  }
+
+  selectSpecialService(): void {
+    this.isSpecialService = true;
+    this.selectedServiceId = '';
+    this.specialServiceName = '';
+    this.saleForm.amount = 0;
+  }
+
+  setPayment(method: PaymentMethod): void {
+    this.selectedPayment = method;
+  }
+
+  async createBarber(): Promise<void> {
+    try {
+      await this.api('/api/barbers', {
+        method: 'POST',
+        body: JSON.stringify({ name: this.newBarberName }),
+      });
+      this.newBarberName = '';
+      this.showInfoMessage('Barbero creado correctamente.', 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showInfoMessage(this.errorMessage(error), 'error');
+    }
+  }
+
+  async updateBarber(barber: Barber): Promise<void> {
+    try {
+      await this.api(`/api/barbers/${barber.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ name: barber.name }),
+      });
+      this.showInfoMessage('Nombre del barbero actualizado.', 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showInfoMessage(this.errorMessage(error), 'error');
+      await this.loadData(true);
+    }
+  }
+
+  async deleteBarber(barber: Barber): Promise<void> {
+    if (!window.confirm(`¿Eliminar a ${barber.name}? Las ventas históricas no se borrarán.`)) return;
+    try {
+      await this.api(`/api/barbers/${barber.id}/delete`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      this.showInfoMessage('Barbero eliminado. El historial fue conservado.', 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showInfoMessage(this.errorMessage(error), 'error');
+    }
+  }
+
+  async createService(): Promise<void> {
+    try {
+      await this.api('/api/services', {
+        method: 'POST',
+        body: JSON.stringify(this.newService),
+      });
+      this.newService = { name: '', price: 0 };
+      this.showInfoMessage('Servicio y precio creados correctamente.', 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showInfoMessage(this.errorMessage(error), 'error');
+    }
+  }
+
+  async updateService(service: ServiceItem): Promise<void> {
+    try {
+      await this.api(`/api/services/${service.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ name: service.name, price: Number(service.price) }),
+      });
+      this.showInfoMessage('Servicio actualizado.', 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showInfoMessage(this.errorMessage(error), 'error');
+      await this.loadData(true);
+    }
+  }
+
+  async deleteService(service: ServiceItem): Promise<void> {
+    if (!window.confirm(`¿Eliminar ${service.name}? Las ventas históricas no se borrarán.`)) return;
+    try {
+      await this.api(`/api/services/${service.id}/delete`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      this.showInfoMessage('Servicio eliminado. El historial fue conservado.', 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showInfoMessage(this.errorMessage(error), 'error');
+    }
+  }
+
+  async submitSale(): Promise<void> {
+    if (!this.activeBranchId) {
+      this.showSaleMessage('Selecciona primero una barbería.', 'error');
+      return;
+    }
+    if (this.isCurrentDayClosed()) {
+      this.showSaleMessage('La caja de esta barbería está cerrada.', 'error');
+      return;
+    }
+    if (!this.isSpecialService && !this.selectedServiceId) {
+      this.showSaleMessage('Selecciona un servicio.', 'error');
+      return;
+    }
+    if (this.isSpecialService && this.specialServiceName.trim().length < 2) {
+      this.showSaleMessage('Escribe el nombre del servicio especial.', 'error');
+      return;
+    }
+    if (this.selectedPayment === 'nequi' && !this.proofDataUrl) {
+      this.showSaleMessage('Sube o toma la foto del comprobante.', 'error');
+      return;
+    }
+
+    try {
+      await this.api('/api/sales', {
+        method: 'POST',
+        body: JSON.stringify({
+          branch_id: this.activeBranchId,
+          barber_id: this.saleForm.barber_id,
+          service_id: this.selectedServiceId,
+          custom_service_name: this.isSpecialService ? this.specialServiceName.trim() : '',
+          amount: Number(this.saleForm.amount),
+          payment_method: this.selectedPayment,
+          proof_image: this.proofDataUrl,
+          proof_note: this.saleForm.proof_note,
+          client_name: this.saleForm.client_name,
+        }),
+      });
+      this.saleForm.client_name = '';
+      this.saleForm.proof_note = '';
+      this.proofDataUrl = '';
+      this.proofPreviewUrl = '';
+      this.specialServiceName = '';
+      if (this.services.length) this.selectService(this.services[0]);
+      this.showSaleMessage(`Venta guardada en ${this.activeBranch()?.name}.`, 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showSaleMessage(this.errorMessage(error), 'error');
+    }
+  }
+
+  connectRealtime(): void {
+    if (!('EventSource' in window)) return;
+    this.eventSource = new EventSource('/api/events');
+    this.eventSource.addEventListener('open', () => {
+      this.realtimeConnected = true;
+      this.renderNow();
+    });
+    this.eventSource.addEventListener('db-changed', () => {
+      this.realtimeConnected = true;
+      if (this.activeBranchId) this.loadData(true);
+      else this.loadAdminOptions(true);
+    });
+    this.eventSource.addEventListener('error', () => {
+      this.realtimeConnected = false;
+      this.renderNow();
+    });
+  }
+
+  async updateSaleStatus(saleId: string, status: SaleStatus): Promise<void> {
+    try {
+      await this.api(`/api/sales/${saleId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status }),
+      });
+      await this.loadData(true);
+    } catch (error) {
+      window.alert(this.errorMessage(error));
+    }
+  }
+
+  async closeDay(): Promise<void> {
+    try {
+      await this.api('/api/day/close', {
+        method: 'POST',
+        body: JSON.stringify({
+          branch_id: this.activeBranchId,
+          counted_cash: Number(this.countedCash || 0),
+        }),
+      });
+      this.showCloseMessage(`Caja de ${this.activeBranch()?.name} cerrada y guardada localmente.`, 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showCloseMessage(this.errorMessage(error), 'error');
+    }
+  }
+
+  async reopenDay(): Promise<void> {
+    if (!window.confirm(`¿Reabrir la caja de ${this.activeBranch()?.name}?`)) return;
+    try {
+      await this.api('/api/day/reopen', {
+        method: 'POST',
+        body: JSON.stringify({ branch_id: this.activeBranchId }),
+      });
+      this.showCloseMessage('Caja reabierta.', 'success');
+      await this.loadData(true);
+    } catch (error) {
+      this.showCloseMessage(this.errorMessage(error), 'error');
+    }
+  }
+
+  async handleProofFile(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      this.showSaleMessage('Selecciona una imagen.', 'error');
+      return;
+    }
+    try {
+      const dataUrl = await this.readImage(file);
+      this.proofDataUrl = dataUrl;
+      this.proofPreviewUrl = dataUrl;
+    } catch (error) {
+      this.showSaleMessage(this.errorMessage(error), 'error');
+    } finally {
+      input.value = '';
+    }
+  }
+
+  todayKey(): string {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+  }
+
+  saleDay(sale: Sale): string {
+    return String(sale.created_at || '').slice(0, 10);
+  }
+
+  timeOnly(value: string): string {
+    return String(value || '').slice(11, 16) || '--:--';
+  }
+
+  formatMoney(value: number): string {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(Number(value || 0));
+  }
+
+  paymentLabel(method: PaymentMethod): string {
+    return method === 'nequi' ? 'Nequi' : 'Efectivo';
+  }
+
+  statusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      confirmed: 'Confirmada',
+      pending_review: 'Pendiente',
+      rejected: 'Rechazada',
+      annulled: 'Anulada',
+      scheduled: 'Agendada',
+      cancelled: 'Cancelada',
+      closed: 'Cerrado',
+      reopened: 'Reabierto',
+    };
+    return labels[status] || status;
+  }
+
+  branchSales(): Sale[] {
+    return this.sales.filter((sale) => sale.branch_id === this.activeBranchId);
+  }
+
+  activeSales(): Sale[] {
+    return this.branchSales().filter(
+      (sale) =>
+        this.saleDay(sale) === this.todayKey() &&
+        sale.status !== 'annulled' &&
+        sale.status !== 'rejected',
+    );
+  }
+
+  confirmedSales(): Sale[] {
+    return this.activeSales().filter((sale) => sale.status === 'confirmed');
+  }
+
+  selectedBarber(): Barber | undefined {
+    return this.barbers.find((barber) => barber.id === this.saleForm.barber_id);
+  }
+
+  selectedBarberSales(): Sale[] {
+    return this.activeSales().filter((sale) => sale.barber_id === this.saleForm.barber_id);
+  }
+
+  selectedBarberTotal(): number {
+    return this.sum(this.selectedBarberSales());
+  }
+
+  selectedBarberCash(): number {
+    return this.sum(this.selectedBarberSales().filter((sale) => sale.payment_method === 'cash'));
+  }
+
+  selectedBarberNequi(): number {
+    return this.sum(this.selectedBarberSales().filter((sale) => sale.payment_method === 'nequi'));
+  }
+
+  expectedCash(): number {
+    return this.sum(this.confirmedSales().filter((sale) => sale.payment_method === 'cash'));
+  }
+
+  nequiConfirmed(): number {
+    return this.sum(this.confirmedSales().filter((sale) => sale.payment_method === 'nequi'));
+  }
+
+  nequiPending(): number {
+    return this.sum(this.activeSales().filter((sale) => sale.status === 'pending_review'));
+  }
+
+  totalConfirmed(): number {
+    return this.sum(this.confirmedSales());
+  }
+
+  pendingReviewSales(): Sale[] {
+    return this.branchSales().filter((sale) => sale.status === 'pending_review');
+  }
+
+  salesForDate(dateKey: string, branchId = this.activeBranchId): Sale[] {
+    return this.sales.filter((sale) => this.saleDay(sale) === dateKey && sale.branch_id === branchId);
+  }
+
+  confirmedSalesForDate(dateKey: string, branchId = this.activeBranchId): Sale[] {
+    return this.salesForDate(dateKey, branchId).filter((sale) => sale.status === 'confirmed');
+  }
+
+  accountingSales(): Sale[] {
+    return this.salesForDate(this.accountingDate);
+  }
+
+  accountingConfirmedSales(): Sale[] {
+    return this.confirmedSalesForDate(this.accountingDate);
+  }
+
+  accountingTotal(): number {
+    return this.sum(this.accountingConfirmedSales());
+  }
+
+  accountingCash(): number {
+    return this.sum(
+      this.accountingConfirmedSales().filter((sale) => sale.payment_method === 'cash'),
+    );
+  }
+
+  accountingNequi(): number {
+    return this.sum(
+      this.accountingConfirmedSales().filter((sale) => sale.payment_method === 'nequi'),
+    );
+  }
+
+  accountingPendingSales(): Sale[] {
+    return this.accountingSales().filter((sale) => sale.status === 'pending_review');
+  }
+
+  accountingPendingTotal(): number {
+    return this.sum(this.accountingPendingSales());
+  }
+
+  selectAccountingDate(dateKey: string): void {
+    this.accountingDate = dateKey;
+  }
+
+  changeAccountingMonth(offset: number): void {
+    const [year, month] = this.accountingMonthKey.split('-').map(Number);
+    const changed = new Date(year, month - 1 + offset, 1);
+    this.accountingMonthKey = `${changed.getFullYear()}-${String(changed.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  accountingMonthLabel(): string {
+    const [year, month] = this.accountingMonthKey.split('-').map(Number);
+    const label = new Intl.DateTimeFormat('es-CO', {
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(year, month - 1, 1));
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+
+  accountingCalendarDays(): CalendarDay[] {
+    const [year, month] = this.accountingMonthKey.split('-').map(Number);
+    const firstDay = new Date(year, month - 1, 1);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const leadingBlanks = (firstDay.getDay() + 6) % 7;
+    const days: CalendarDay[] = [];
+
+    for (let index = 0; index < leadingBlanks; index++) {
+      days.push({
+        key: `blank-${index}`,
+        day: 0,
+        inMonth: false,
+        hasSales: false,
+        isFuture: false,
+      });
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const hasSales = this.salesForDate(key).some(
+        (sale) => sale.status !== 'annulled' && sale.status !== 'rejected',
+      );
+      days.push({
+        key,
+        day,
+        inMonth: true,
+        hasSales,
+        isFuture: key > this.todayKey(),
+      });
+    }
+
+    return days;
+  }
+
+  accountingBarberTotal(barberId: string): number {
+    return this.sum(
+      this.accountingConfirmedSales().filter((sale) => sale.barber_id === barberId),
+    );
+  }
+
+  accountingBarberCount(barberId: string): number {
+    return this.accountingConfirmedSales().filter((sale) => sale.barber_id === barberId).length;
+  }
+
+  accountingBarberCommission(barberId: string): number {
+    return this.accountingBarberTotal(barberId) * Number(this.settings.commission_rate || 0.5);
+  }
+
+  examinedSales(): Sale[] {
+    return this.salesForDate(this.examinedDate, this.examinedBranchId);
+  }
+
+  examinedNequiSales(): Sale[] {
+    return this.examinedSales().filter((sale) => sale.payment_method === 'nequi');
+  }
+
+  selectedClosure(): Closure | undefined {
+    return this.closures.find(
+      (closure) => closure.date === this.examinedDate && closure.branch_id === this.examinedBranchId,
+    );
+  }
+
+  selectedClosureBarbers(): ClosureBarber[] {
+    return this.selectedClosure()?.barbers || [];
+  }
+
+  selectExaminedClosure(closure: Closure): void {
+    this.examinedDate = closure.date;
+    this.examinedBranchId = closure.branch_id;
+  }
+
+  closureEvents(closure: Closure): ClosureEvent[] {
+    if (closure.events?.length) return closure.events;
+    const events: ClosureEvent[] = [];
+    if (closure.closed_at) {
+      events.push({
+        type: 'closed',
+        at: closure.closed_at,
+        counted_cash: closure.counted_cash,
+        expected_cash: closure.expected_cash,
+        cash_difference: closure.cash_difference,
+        total_confirmed: closure.total_confirmed,
+        cash_total: closure.cash_total,
+        nequi_confirmed: closure.nequi_confirmed,
+        sales_count: closure.sales_count,
+      });
+    }
+    if (closure.reopened_at) events.push({ type: 'reopened', at: closure.reopened_at });
+    return events;
+  }
+
+  closureEventLabel(event: ClosureEvent): string {
+    return event.type === 'closed' ? 'Cierre' : 'Apertura';
+  }
+
+  dayTotal(dateKey: string): number {
+    return this.sum(this.confirmedSalesForDate(dateKey, this.examinedBranchId));
+  }
+
+  dayCash(dateKey: string): number {
+    return this.sum(
+      this.confirmedSalesForDate(dateKey, this.examinedBranchId).filter(
+        (sale) => sale.payment_method === 'cash',
+      ),
+    );
+  }
+
+  dayNequi(dateKey: string): number {
+    return this.sum(
+      this.confirmedSalesForDate(dateKey, this.examinedBranchId).filter(
+        (sale) => sale.payment_method === 'nequi',
+      ),
+    );
+  }
+
+  dayPendingNequi(dateKey: string): number {
+    return this.salesForDate(dateKey, this.examinedBranchId).filter(
+      (sale) => sale.status === 'pending_review',
+    ).length;
+  }
+
+  pendingTodayCount(): number {
+    return this.activeSales().filter((sale) => sale.status === 'pending_review').length;
+  }
+
+  cashDifference(): number {
+    const closure = this.currentClosure();
+    if (closure?.status === 'closed') return closure.cash_difference;
+    return Number(this.countedCash || 0) - this.expectedCash();
+  }
+
+  barberTotal(barberId: string): number {
+    return this.sum(this.confirmedSales().filter((sale) => sale.barber_id === barberId));
+  }
+
+  barberCount(barberId: string): number {
+    return this.confirmedSales().filter((sale) => sale.barber_id === barberId).length;
+  }
+
+  barberCommission(barberId: string): number {
+    return this.barberTotal(barberId) * Number(this.settings.commission_rate || 0.5);
+  }
+
+  orderedClosures(): Closure[] {
+    return [...this.closures]
+      .filter((closure) => closure.branch_id === this.activeBranchId)
+      .sort((a, b) => `${b.date} ${b.closed_at}`.localeCompare(`${a.date} ${a.closed_at}`));
+  }
+
+  orderedBranchClosures(): Closure[] {
+    return this.orderedClosures().filter((closure) => closure.branch_id === this.activeBranchId);
+  }
+
+  currentClosure(): Closure | undefined {
+    return this.closures.find(
+      (closure) => closure.date === this.todayKey() && closure.branch_id === this.activeBranchId,
+    );
+  }
+
+  isCurrentDayClosed(): boolean {
+    return this.currentClosure()?.status === 'closed';
+  }
+
+  weeklyChart(): ChartPoint[] {
+    const points: ChartPoint[] = [];
+    const formatter = new Intl.DateTimeFormat('es-CO', { weekday: 'short' });
+    for (let offset = 6; offset >= 0; offset--) {
+      const date = new Date();
+      date.setHours(12, 0, 0, 0);
+      date.setDate(date.getDate() - offset);
+      const key = this.localDateKey(date);
+      points.push({
+        key,
+        label: formatter.format(date).replace('.', ''),
+        value: this.sum(this.confirmedSalesForDate(key)),
+        percent: 0,
+      });
+    }
+    const max = Math.max(...points.map((point) => point.value), 1);
+    return points.map((point) => ({
+      ...point,
+      percent: point.value ? Math.max(8, Math.round((point.value / max) * 100)) : 3,
+    }));
+  }
+
+  serviceChart(): ChartPoint[] {
+    const counts = new Map<string, { label: string; value: number }>();
+    this.confirmedSales().forEach((sale) => {
+      const key = sale.service_name.trim().toLocaleLowerCase('es');
+      const current = counts.get(key);
+      counts.set(key, {
+        label: sale.service_name,
+        value: (current?.value || 0) + 1,
+      });
+    });
+    const grouped = [...counts.entries()].map(([key, item]) => ({
+      key,
+      label: item.label,
+      value: item.value,
+      percent: 0,
+    }));
+    const max = Math.max(...grouped.map((point) => point.value), 1);
+    return grouped
+      .map((point) => ({
+        ...point,
+        percent: point.value ? Math.max(6, Math.round((point.value / max) * 100)) : 0,
+      }))
+      .sort((a, b) => b.value - a.value);
+  }
+
+  trackById(_index: number, item: { id: string }): string {
+    return item.id;
+  }
+
+  trackByKey(_index: number, item: { key: string }): string {
+    return item.key;
+  }
+
+  private localDateKey(date: Date): string {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
+
+  private sum(sales: Sale[]): number {
+    return sales.reduce((total, sale) => total + Number(sale.amount || 0), 0);
+  }
+
+  private async api<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const response = await fetch(path, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Branch-Id': this.activeBranchId,
+        'X-Admin-Token': this.adminToken,
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'No se pudo completar la acción.');
+    return data as T;
+  }
+
+  private readImage(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private showSaleMessage(text: string, type: 'success' | 'error'): void {
+    this.saleMessage = text;
+    this.saleMessageType = type;
+    this.clearLater(() => {
+      this.saleMessage = '';
+      this.saleMessageType = '';
+    });
+  }
+
+  private showCloseMessage(text: string, type: 'success' | 'error'): void {
+    this.closeMessage = text;
+    this.closeMessageType = type;
+    this.clearLater(() => {
+      this.closeMessage = '';
+      this.closeMessageType = '';
+    }, 6000);
+  }
+
+  private showInfoMessage(text: string, type: 'success' | 'error'): void {
+    this.infoMessage = text;
+    this.infoMessageType = type;
+    this.clearLater(() => {
+      this.infoMessage = '';
+      this.infoMessageType = '';
+    }, 5000);
+  }
+
+  private clearLater(callback: () => void, delay = 3600): void {
+    const timer = window.setTimeout(() => {
+      callback();
+      this.renderNow();
+    }, delay);
+    this.messageTimers.push(timer);
+  }
+
+  private renderNow(): void {
+    if (!this.destroyed) this.changeDetector.detectChanges();
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
+  }
+}

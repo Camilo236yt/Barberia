@@ -1,0 +1,11 @@
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\Users\\Chiqui-PC V2\\AppData\\Local\\npm-cache\\_npx\\32026684e21afda6\\node_modules',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\Users\Chiqui-PC V2\AppData\Local\npm-cache\_npx\32026684e21afda6\node_modules\@poppinss\dumper\build\formatters\html'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\Users\\Chiqui-PC V2\\AppData\\Local\\npm-cache\\_npx\\32026684e21afda6\\node_modules\\@poppinss\\dumper\\build\\formatters\\html'
+npm warn cleanup     }
+npm warn cleanup   ]
+npm warn cleanup ]

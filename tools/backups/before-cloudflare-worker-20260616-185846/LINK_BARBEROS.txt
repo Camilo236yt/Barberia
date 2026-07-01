@@ -1,0 +1,7 @@
+﻿Link para barberos (internet/datos moviles):
+https://kimono-punch-diving.ngrok-free.dev/barberos
+
+Este link fijo de ngrok funciona con datos moviles mientras esta ventana y el servidor esten abiertos. Si el servidor esta apagado, los barberos solo deben refrescar cuando vuelvas a abrirlo.
+
+Admin en la laptop:
+http://localhost:8000/admin

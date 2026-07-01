@@ -1,0 +1,25 @@
+[Barberia] Usando Python 3.13.14
+[Barberia] Validando servidor...
+
+Servidor activo.
+PID: 5852
+Admin/laptop:     http://localhost:8000/admin
+Barberos/Android: http://192.168.1.75:8000/barberos
+
+[Barberia] Usando cloudflared version 2026.6.0 (built 2026-06-08T11:16 UTC)
+[Barberia] Creando link publico HTTPS para datos moviles...
+
+Cuando aparezca el enlace trycloudflare, comparte SOLO este formato con los barberos:
+https://[link-del-tunel].trycloudflare.com/barberos
+
+Este link cambia cada vez que reinicias el tunel. Cierra esta ventana para apagar el acceso publico.
+
+
+========================================
+LINK BARBEROS DATOS MOVILES:
+https://records-citation-isolation-tattoo.trycloudflare.com/barberos
+
+Admin sigue siendo local:
+http://localhost:8000/admin
+========================================
+

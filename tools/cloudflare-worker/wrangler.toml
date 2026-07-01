@@ -1,0 +1,7 @@
+name = "barberia-ngrok-proxy"
+main = "src/worker.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+
+[vars]
+UPSTREAM_ORIGIN = "https://kimono-punch-diving.ngrok-free.dev"
