@@ -22,7 +22,12 @@ $RemoteRef = "refs/remotes/$Remote/$Branch"
 $ArchiveDirectory = Join-Path $AppRoot "data\history-archives"
 $StatusPath = Join-Path $AppRoot "data\history-backup-status.json"
 $UploadIndexPath = Join-Path $AppRoot "data\history-upload-index.json"
-$GitExe = (Get-Command git.exe -ErrorAction SilentlyContinue).Source
+$PortableGit = Join-Path $env:LOCALAPPDATA "CapitanGold\Git\cmd\git.exe"
+$GitExe = if (Test-Path -LiteralPath $PortableGit) {
+  $PortableGit
+} else {
+  (Get-Command git.exe -ErrorAction SilentlyContinue).Source
+}
 if (-not $GitExe) {
   $GitExe = (Get-Command git -ErrorAction SilentlyContinue).Source
 }

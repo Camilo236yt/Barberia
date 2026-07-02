@@ -33,6 +33,14 @@ function Invoke-UpdateCheck {
 }
 
 function Find-Python {
+  $portablePython = Join-Path $AppRoot "tools\python\python.exe"
+  if (Test-Path -LiteralPath $portablePython) {
+    try {
+      & $portablePython -c "import sys; print(sys.version)" | Out-Null
+      return [pscustomobject]@{ File = $portablePython; Args = @() }
+    } catch {
+    }
+  }
   foreach ($candidate in @("python", "py")) {
     $command = Get-Command $candidate -ErrorAction SilentlyContinue
     if (-not $command) {
@@ -136,6 +144,41 @@ function Install-NgrokIfMissing {
   }
 }
 
+function Find-NgrokEndpointProcess($EndpointHost) {
+  $expectedPath = [System.IO.Path]::GetFullPath($NgrokExe)
+  $matches = @()
+  foreach ($processInfo in Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) {
+    if (-not $processInfo.ExecutablePath -or -not $processInfo.CommandLine) {
+      continue
+    }
+    $processPath = [System.IO.Path]::GetFullPath($processInfo.ExecutablePath)
+    $usesEndpoint = $processInfo.CommandLine.Contains("--url=$EndpointHost") -or
+      $processInfo.CommandLine.Contains("--url=https://$EndpointHost")
+    if ($processPath -eq $expectedPath -and $usesEndpoint) {
+      $parentIsRunning = $null -ne (
+        Get-Process -Id $processInfo.ParentProcessId -ErrorAction SilentlyContinue
+      )
+      $matches += [pscustomobject]@{
+        Process = Get-Process -Id $processInfo.ProcessId -ErrorAction SilentlyContinue
+        IsOrphan = -not $parentIsRunning
+      }
+    }
+  }
+  return @($matches | Where-Object { $_.Process })
+}
+
+function Start-NgrokTunnel($EndpointHost, $StdoutLog, $StderrLog) {
+  Set-Content -LiteralPath $StdoutLog -Value "" -Encoding UTF8
+  Set-Content -LiteralPath $StderrLog -Value "" -Encoding UTF8
+  return Start-Process -FilePath $NgrokExe `
+    -ArgumentList @("http", "--url=$EndpointHost", "$Port") `
+    -WorkingDirectory $AppRoot `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $StdoutLog `
+    -RedirectStandardError $StderrLog `
+    -PassThru
+}
+
 function Get-PortListener {
   return Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
     Select-Object -First 1
@@ -228,6 +271,7 @@ try {
   }
 
   $tunnelProcess = $null
+  $ownsTunnelProcess = $false
   try {
     if ($Internet) {
       Install-NgrokIfMissing
@@ -244,17 +288,45 @@ try {
       $stdoutLog = Join-Path $logDir "admin-online-out.log"
       $stderrLog = Join-Path $logDir "admin-online-err.log"
 
-      Write-Step "Creando el nuevo enlace administrativo online..."
-      $tunnelProcess = Start-Process -FilePath $NgrokExe `
-        -ArgumentList @("http", "--url=$ngrokHost", "$Port") `
-        -WorkingDirectory $AppRoot `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput $stdoutLog `
-        -RedirectStandardError $stderrLog `
-        -PassThru
-      Start-Sleep -Seconds 2
-      if ($tunnelProcess.HasExited) {
-        throw "ngrok no pudo crear el enlace online. Revisa $stderrLog."
+      $existingTunnels = @(Find-NgrokEndpointProcess $ngrokHost)
+      if ($existingTunnels.Count -gt 0) {
+        $existingTunnel = $existingTunnels[0]
+        $tunnelProcess = $existingTunnel.Process
+        $ownsTunnelProcess = $existingTunnel.IsOrphan
+        Write-Step $(if ($ownsTunnelProcess) {
+          "Recuperando una sesion anterior de ngrok que quedo abierta..."
+        } else {
+          "El enlace online ya esta activo en esta computadora; se reutilizara."
+        })
+      } else {
+        Write-Step "Creando el nuevo enlace administrativo online..."
+        $tunnelProcess = Start-NgrokTunnel $ngrokHost $stdoutLog $stderrLog
+        $ownsTunnelProcess = $true
+        Start-Sleep -Seconds 2
+        if ($tunnelProcess.HasExited) {
+          $ngrokError = if (Test-Path -LiteralPath $stderrLog) {
+            ("$(Get-Content -LiteralPath $stderrLog -Raw)").Trim()
+          } else {
+            ""
+          }
+          if ($ngrokError -match "ERR_NGROK_334") {
+            Write-Step "El dominio estaba liberando una sesion anterior. Reintentando..."
+            Start-Sleep -Seconds 3
+            $tunnelProcess = Start-NgrokTunnel $ngrokHost $stdoutLog $stderrLog
+            Start-Sleep -Seconds 2
+          }
+          if ($tunnelProcess.HasExited) {
+            $ngrokError = if (Test-Path -LiteralPath $stderrLog) {
+              ("$(Get-Content -LiteralPath $stderrLog -Raw)").Trim()
+            } else {
+              ""
+            }
+            if ($ngrokError -match "ERR_NGROK_334") {
+              throw "El dominio de ngrok sigue abierto en otra computadora o sesion. Cierralo desde el panel de ngrok y vuelve a iniciar. No se activo pooling para evitar mezclar datos de dos barberias."
+            }
+            throw "ngrok no pudo crear el enlace online. Revisa $stderrLog."
+          }
+        }
       }
 
       $onlineUrl = Get-OnlineAdminLink
@@ -287,7 +359,7 @@ try {
       Start-Sleep -Milliseconds 600
     }
   } finally {
-    if ($tunnelProcess -and -not $tunnelProcess.HasExited) {
+    if ($ownsTunnelProcess -and $tunnelProcess -and -not $tunnelProcess.HasExited) {
       Stop-Process -Id $tunnelProcess.Id -Force -ErrorAction SilentlyContinue
     }
     if ($serverProcess -and -not $serverProcess.HasExited) {

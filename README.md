@@ -27,6 +27,8 @@ El programa:
 4. Copia el enlace online y lo guarda en `LINK_ADMIN_ONLINE.txt`.
 5. Cuando el segundo administrador entra, solo puede elegir la barbería que no está usando el administrador local.
 
+Si una ventana anterior dejó ngrok abierto, el iniciador reutiliza o recupera esa sesión para evitar `ERR_NGROK_334`. No activa `--pooling-enabled`, porque balancear el mismo dominio entre dos computadoras podría mezclar sus datos.
+
 El antiguo enlace de barberos y la agenda de citas continúan eliminados.
 
 ## Iniciar sin acceso online
@@ -119,10 +121,12 @@ Entrega al cliente `Instalar Barberia.cmd` junto con `Instalar Barberia.ps1`. El
 - Omite Node, Cloudflared, dependencias de desarrollo, registros y datos.
 - No descarga la rama `historial-datos` ni los meses anteriores.
 - Instala el programa en `%LOCALAPPDATA%\CapitanGold\Barberia`.
-- Crea accesos directos para el modo local y el modo Internet.
-- Descarga ngrok desde su fuente oficial solamente al necesitar el acceso online.
+- Instala Python portátil y ngrok desde sus fuentes oficiales.
+- Usa Git instalado o instala Git for Windows oficial con acceso seguro a GitHub cuando no está disponible.
+- No crea accesos directos y elimina los antiguos creados por versiones anteriores.
+- Al finalizar inicia el servidor y abre el panel en el navegador predeterminado.
 
-El panel compilado se publica en `frontend/dist`, por lo que la computadora del cliente no necesita Node ni las dependencias Angular de desarrollo.
+El panel compilado se publica en `frontend/dist`, por lo que la computadora del cliente no necesita Node ni las dependencias Angular de desarrollo. La instalación completa probada ocupa aproximadamente 55 MB.
 
 ## Respaldos mensuales en GitHub
 

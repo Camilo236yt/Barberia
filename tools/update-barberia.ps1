@@ -322,7 +322,12 @@ try {
     exit 0
   }
 
-  $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+  $portableGit = Join-Path $env:LOCALAPPDATA "CapitanGold\Git\cmd\git.exe"
+  $gitCommand = if (Test-Path -LiteralPath $portableGit) {
+    [pscustomobject]@{ Source = $portableGit }
+  } else {
+    Get-Command git.exe -ErrorAction SilentlyContinue
+  }
   if (-not $gitCommand) {
     $gitCommand = Get-Command git -ErrorAction SilentlyContinue
   }
