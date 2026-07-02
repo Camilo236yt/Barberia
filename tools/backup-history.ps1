@@ -60,13 +60,15 @@ function Invoke-Git($Arguments, [switch]$AllowFailure) {
 function Set-BackupStatus($State, $Message) {
   $parent = Split-Path -Parent $StatusPath
   New-Item -ItemType Directory -Path $parent -Force | Out-Null
+  $temporaryStatus = "$StatusPath.tmp"
   [pscustomobject]@{
     state = $State
     month = $(if ($Month) { $Month } else { $Date.Substring(0, 7) })
     date = $Date
     message = $Message
     at = (Get-Date).ToString("o")
-  } | ConvertTo-Json | Set-Content -LiteralPath $StatusPath -Encoding UTF8
+  } | ConvertTo-Json | Set-Content -LiteralPath $temporaryStatus -Encoding UTF8
+  Move-Item -LiteralPath $temporaryStatus -Destination $StatusPath -Force
 }
 
 function Set-UploadedDate($Commit) {

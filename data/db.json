@@ -101,6 +101,102 @@
   ],
   "sales": [
     {
+      "id": "3228f88bb12c",
+      "created_at": "2026-07-01T20:09:19",
+      "branch_id": "barberia-1",
+      "branch_name": "Barbería de Arriba",
+      "barber_id": "jose",
+      "barber_name": "Jose",
+      "service_id": "tijeras",
+      "service_name": "Corte con tijeras",
+      "amount": 25000,
+      "payment_method": "cash",
+      "proof_url": null,
+      "proof_note": "",
+      "client_name": "",
+      "status": "confirmed"
+    },
+    {
+      "id": "95abc4f8ab4a",
+      "created_at": "2026-07-01T20:09:07",
+      "branch_id": "barberia-1",
+      "branch_name": "Barbería de Arriba",
+      "barber_id": "jose",
+      "barber_name": "Jose",
+      "service_id": "barba",
+      "service_name": "Barba",
+      "amount": 15000,
+      "payment_method": "cash",
+      "proof_url": null,
+      "proof_note": "",
+      "client_name": "",
+      "status": "confirmed"
+    },
+    {
+      "id": "78aa9bc98ffd",
+      "created_at": "2026-07-01T20:09:05",
+      "branch_id": "barberia-1",
+      "branch_name": "Barbería de Arriba",
+      "barber_id": "jose",
+      "barber_name": "Jose",
+      "service_id": "basico",
+      "service_name": "Corte básico",
+      "amount": 23000,
+      "payment_method": "cash",
+      "proof_url": null,
+      "proof_note": "",
+      "client_name": "",
+      "status": "confirmed"
+    },
+    {
+      "id": "ec2eeba56c0d",
+      "created_at": "2026-07-01T20:09:04",
+      "branch_id": "barberia-1",
+      "branch_name": "Barbería de Arriba",
+      "barber_id": "jose",
+      "barber_name": "Jose",
+      "service_id": "combo-tijeras",
+      "service_name": "Corte con tijeras y barba",
+      "amount": 40000,
+      "payment_method": "cash",
+      "proof_url": null,
+      "proof_note": "",
+      "client_name": "",
+      "status": "confirmed"
+    },
+    {
+      "id": "6379224ce21a",
+      "created_at": "2026-07-01T20:09:03",
+      "branch_id": "barberia-1",
+      "branch_name": "Barbería de Arriba",
+      "barber_id": "jose",
+      "barber_name": "Jose",
+      "service_id": "barba",
+      "service_name": "Barba",
+      "amount": 15000,
+      "payment_method": "cash",
+      "proof_url": null,
+      "proof_note": "",
+      "client_name": "",
+      "status": "confirmed"
+    },
+    {
+      "id": "f31f785573f3",
+      "created_at": "2026-07-01T20:09:01",
+      "branch_id": "barberia-1",
+      "branch_name": "Barbería de Arriba",
+      "barber_id": "jose",
+      "barber_name": "Jose",
+      "service_id": "barba",
+      "service_name": "Barba",
+      "amount": 15000,
+      "payment_method": "cash",
+      "proof_url": null,
+      "proof_note": "",
+      "client_name": "",
+      "status": "confirmed"
+    },
+    {
       "id": "9aa97539f852",
       "created_at": "2026-07-01T18:49:14",
       "branch_id": "barberia-1",
@@ -805,37 +901,37 @@
       "id": "c5601531a2f2",
       "date": "2026-07-01",
       "branch_id": "barberia-1",
-      "branch_name": "Barbería 1",
-      "closed_at": "2026-07-01T18:56:21",
+      "branch_name": "Barbería de Arriba",
+      "closed_at": "2026-07-01T20:10:18",
       "status": "reopened",
-      "counted_cash": 100000,
-      "expected_cash": 81002,
-      "cash_difference": 18998,
-      "total_confirmed": 81002,
-      "cash_total": 81002,
+      "counted_cash": 20110201,
+      "expected_cash": 214002,
+      "cash_difference": 19896199,
+      "total_confirmed": 214002,
+      "cash_total": 214002,
       "nequi_confirmed": 0,
       "nequi_pending": 0,
-      "sales_count": 3,
+      "sales_count": 9,
       "pending_nequi_count": 0,
       "commission_rate": 0.5,
       "barbers": [
         {
-          "barber_id": "carlos",
-          "barber_name": "Carlos",
-          "sales_count": 3,
-          "total": 81002,
-          "commission": 40501
+          "barber_id": "jose",
+          "barber_name": "Jose",
+          "sales_count": 6,
+          "total": 133000,
+          "commission": 66500
         },
         {
-          "barber_id": "andres",
-          "barber_name": "Andres",
+          "barber_id": "luis",
+          "barber_name": "Luís",
           "sales_count": 0,
           "total": 0,
           "commission": 0
         },
         {
-          "barber_id": "miguel",
-          "barber_name": "Miguel",
+          "barber_id": "samuel",
+          "barber_name": "Samuel",
           "sales_count": 0,
           "total": 0,
           "commission": 0
@@ -886,9 +982,39 @@
         {
           "type": "reopened",
           "at": "2026-07-01T18:56:25"
+        },
+        {
+          "type": "closed",
+          "at": "2026-07-01T20:09:39",
+          "counted_cash": 20110201,
+          "expected_cash": 214002,
+          "cash_difference": 19896199,
+          "total_confirmed": 214002,
+          "cash_total": 214002,
+          "nequi_confirmed": 0,
+          "sales_count": 9
+        },
+        {
+          "type": "reopened",
+          "at": "2026-07-01T20:10:17"
+        },
+        {
+          "type": "closed",
+          "at": "2026-07-01T20:10:18",
+          "counted_cash": 20110201,
+          "expected_cash": 214002,
+          "cash_difference": 19896199,
+          "total_confirmed": 214002,
+          "cash_total": 214002,
+          "nequi_confirmed": 0,
+          "sales_count": 9
+        },
+        {
+          "type": "reopened",
+          "at": "2026-07-01T20:10:23"
         }
       ],
-      "reopened_at": "2026-07-01T18:56:25"
+      "reopened_at": "2026-07-01T20:10:23"
     },
     {
       "id": "63275cf7ea06",

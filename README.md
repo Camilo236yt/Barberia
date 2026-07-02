@@ -88,6 +88,8 @@ Los dos iniciadores consultan la rama `main` del repositorio Git antes de abrir 
 - Si existe una versión nueva, aparece un aviso con sus cambios y botones para actualizar ahora o posponerla.
 - Antes de actualizar se respaldan la contabilidad, los comprobantes, los tokens y la configuración local.
 - Después de instalar una versión se usa el panel precompilado y se valida el servidor; las herramientas de desarrollo no se descargan al cliente.
+- Si hay archivos modificados, faltantes o incompatibles, se copian en `%LOCALAPPDATA%\CapitanGold\updates\recovery`, se fuerza la versión oficial y se eliminan los sobrantes.
+- Una actualización interrumpida recupera automáticamente los datos locales en el siguiente inicio.
 
 Antes de publicar por primera vez esta función, deja de seguir los datos locales que ya existían en el historial:
 
@@ -124,7 +126,7 @@ El panel compilado se publica en `frontend/dist`, por lo que la computadora del 
 
 ## Respaldos mensuales en GitHub
 
-Al cerrar o reabrir una caja, el servidor crea `data/history-archives/AAAA-MM-DD.zip` con las ventas, cierres, configuración y comprobantes del día. Después lo sube automáticamente a la rama independiente `historial-datos`, sin cambiar `main`. Los días se agrupan por mes en la interfaz y se descargan juntos para evitar archivos demasiado grandes.
+Al cerrar o reabrir una caja, el servidor crea `data/history-archives/AAAA-MM-DD.zip` con las ventas, cierres, configuración y comprobantes del día. Después lo sube automáticamente a la rama independiente `historial-datos`, sin cambiar `main`. Una barra muestra si está preparando, subiendo, completado o si GitHub devolvió un error. Los días se agrupan por mes en la interfaz y se descargan juntos para evitar archivos demasiado grandes.
 
 En `Historial > Buscar respaldos` aparecen los meses disponibles. Un mes remoto solo se descarga cuando el administrador pulsa `Descargar`; entonces sus cierres aparecen en el calendario y sus comprobantes vuelven a estar disponibles.
 

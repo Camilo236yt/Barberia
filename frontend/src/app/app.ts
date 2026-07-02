@@ -107,15 +107,18 @@ interface AdminOptionsResponse {
   branches: Branch[];
 }
 
+interface HistoryBackupStatus {
+  state?: 'idle' | 'queued' | 'uploading' | 'success' | 'error';
+  date?: string;
+  month?: string;
+  message?: string;
+  at?: string;
+}
+
 interface HistoryBackupResponse {
   local_months: string[];
   remote_months: string[];
-  status?: {
-    state?: 'uploading' | 'success' | 'error';
-    month?: string;
-    message?: string;
-    at?: string;
-  };
+  status?: HistoryBackupStatus;
   remote_error?: string;
 }
 
@@ -180,6 +183,11 @@ export class App implements OnInit, OnDestroy {
   historyBackupLoading = false;
   historyBackupMessage = '';
   historyBackupMessageType: 'success' | 'error' | '' = '';
+  backupProgressVisible = false;
+  backupProgress = 0;
+  backupProgressState: 'queued' | 'uploading' | 'success' | 'error' = 'queued';
+  backupProgressMessage = '';
+  backupTargetDate = '';
 
   saleForm = {
     barber_id: '',
@@ -201,6 +209,8 @@ export class App implements OnInit, OnDestroy {
   infoMessage = '';
   infoMessageType: 'success' | 'error' | '' = '';
   private refreshTimer?: number;
+  private backupStatusTimer?: number;
+  private backupStatusBusy = false;
   private localSessionTimer?: number;
   private localSessionId = '';
   private eventSource?: EventSource;
@@ -225,6 +235,7 @@ export class App implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroyed = true;
     if (this.refreshTimer) window.clearInterval(this.refreshTimer);
+    if (this.backupStatusTimer) window.clearInterval(this.backupStatusTimer);
     this.closeLocalSession();
     window.removeEventListener('pagehide', this.localPageHideHandler);
     window.removeEventListener('pageshow', this.localPageShowHandler);
@@ -570,7 +581,7 @@ export class App implements OnInit, OnDestroy {
 
   async closeDay(): Promise<void> {
     try {
-      await this.api('/api/day/close', {
+      const result = await this.api<{ backup_date?: string }>('/api/day/close', {
         method: 'POST',
         body: JSON.stringify({
           branch_id: this.activeBranchId,
@@ -581,6 +592,7 @@ export class App implements OnInit, OnDestroy {
         `Caja de ${this.activeBranch()?.name} cerrada. El respaldo de GitHub se está enviando en segundo plano.`,
         'success',
       );
+      this.startBackupProgress(result.backup_date || this.todayKey());
       await this.loadData(true);
     } catch (error) {
       this.showCloseMessage(this.errorMessage(error), 'error');
@@ -590,14 +602,90 @@ export class App implements OnInit, OnDestroy {
   async reopenDay(): Promise<void> {
     if (!window.confirm(`¿Reabrir la caja de ${this.activeBranch()?.name}?`)) return;
     try {
-      await this.api('/api/day/reopen', {
+      const result = await this.api<{ backup_date?: string }>('/api/day/reopen', {
         method: 'POST',
         body: JSON.stringify({ branch_id: this.activeBranchId }),
       });
-      this.showCloseMessage('Caja reabierta.', 'success');
+      this.showCloseMessage('Caja reabierta. Actualizando el respaldo de GitHub.', 'success');
+      this.startBackupProgress(result.backup_date || this.todayKey());
       await this.loadData(true);
     } catch (error) {
       this.showCloseMessage(this.errorMessage(error), 'error');
+    }
+  }
+
+  private startBackupProgress(dateKey: string): void {
+    if (this.backupStatusTimer) window.clearInterval(this.backupStatusTimer);
+    this.backupTargetDate = dateKey;
+    this.backupProgressVisible = true;
+    this.backupProgressState = 'queued';
+    this.backupProgress = 15;
+    this.backupProgressMessage = 'Preparando el respaldo y esperando el turno de subida...';
+    this.backupStatusBusy = false;
+    void this.refreshBackupProgress();
+    this.backupStatusTimer = window.setInterval(() => {
+      void this.refreshBackupProgress();
+    }, 1200);
+  }
+
+  private async refreshBackupProgress(): Promise<void> {
+    if (this.backupStatusBusy || !this.backupProgressVisible) return;
+    this.backupStatusBusy = true;
+    try {
+      const response = await this.api<{ status: HistoryBackupStatus }>(
+        '/api/history-backup-status',
+      );
+      const status = response.status || {};
+      if (status.date && status.date !== this.backupTargetDate) {
+        this.backupProgressState = 'queued';
+        this.backupProgress = Math.min(30, Math.max(this.backupProgress, 20));
+        this.backupProgressMessage = `Terminando un respaldo anterior (${status.date})...`;
+        return;
+      }
+
+      if (status.state === 'uploading') {
+        this.backupProgressState = 'uploading';
+        this.backupProgress = Math.min(90, Math.max(42, this.backupProgress + 6));
+        this.backupProgressMessage = status.message || 'Subiendo el historial a GitHub...';
+      } else if (status.state === 'success') {
+        this.backupProgressState = 'success';
+        this.backupProgress = 100;
+        this.backupProgressMessage =
+          status.message || 'El respaldo se subió correctamente a GitHub.';
+        this.closeMessage = `Caja de ${this.activeBranch()?.name} cerrada y respaldada correctamente en GitHub.`;
+        this.closeMessageType = 'success';
+        this.stopBackupProgressPolling();
+      } else if (status.state === 'error') {
+        this.backupProgressState = 'error';
+        this.backupProgress = 100;
+        this.backupProgressMessage = status.message || 'GitHub rechazó el respaldo.';
+        this.closeMessage = `La caja quedó guardada localmente, pero el respaldo de GitHub falló: ${this.backupProgressMessage}`;
+        this.closeMessageType = 'error';
+        this.stopBackupProgressPolling();
+      } else {
+        this.backupProgressState = 'queued';
+        this.backupProgress = Math.min(35, Math.max(this.backupProgress, 18));
+        this.backupProgressMessage =
+          status.message || 'El respaldo está esperando para comenzar.';
+      }
+    } catch (error) {
+      this.backupProgressState = 'error';
+      this.backupProgress = 100;
+      this.backupProgressMessage = this.errorMessage(error);
+      this.closeMessage =
+        'La caja quedó guardada localmente, pero no se pudo consultar el respaldo.';
+      this.closeMessageType = 'error';
+      this.stopBackupProgressPolling();
+    } finally {
+      this.backupStatusBusy = false;
+      this.renderNow();
+    }
+  }
+
+  private stopBackupProgressPolling(): void {
+    if (this.backupStatusTimer) {
+      window.clearInterval(this.backupStatusTimer);
+      this.backupStatusTimer = undefined;
     }
   }
 

@@ -934,6 +934,85 @@ th {
   color: var(--red);
 }
 
+.backup-progress-card {
+  border: 1px solid #d7c18a;
+  border-radius: 10px;
+  background: #fffaf0;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.backup-progress-card.success {
+  border-color: #9ecdb7;
+  background: #f0f9f4;
+}
+
+.backup-progress-card.error {
+  border-color: #dfaaa6;
+  background: #fff2f1;
+}
+
+.backup-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8rem;
+}
+
+.backup-progress-heading span {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.backup-progress-track {
+  overflow: hidden;
+  height: 9px;
+  border-radius: 999px;
+  background: #dedede;
+  margin: 9px 0 7px;
+}
+
+.backup-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #a17a2d;
+  transition: width 300ms ease;
+}
+
+.backup-progress-track i.active {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      #a17a2d 0 10px,
+      #c49a42 10px 20px
+    );
+  background-size: 28px 28px;
+  animation: backup-progress-stripes 800ms linear infinite;
+}
+
+.backup-progress-card.success .backup-progress-track i {
+  background: var(--green);
+}
+
+.backup-progress-card.error .backup-progress-track i {
+  background: var(--red);
+}
+
+.backup-progress-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+@keyframes backup-progress-stripes {
+  to {
+    background-position: 28px 0;
+  }
+}
+
 .cash-diff.positive {
   color: var(--green);
 }

@@ -134,6 +134,56 @@ function Backup-RuntimeData {
   return $backupRoot
 }
 
+function Backup-ModifiedCode($Changes) {
+  if (-not $Changes -or @($Changes).Count -eq 0) {
+    return ""
+  }
+  $stamp = (Get-Date -Format "yyyyMMdd-HHmmss") + "-$PID-" + [guid]::NewGuid().ToString("N").Substring(0, 8)
+  $recoveryRoot = Join-Path $UpdateStateRoot "recovery\$appId\$stamp"
+  New-Item -ItemType Directory -Path $recoveryRoot -Force | Out-Null
+  $manifest = @()
+
+  foreach ($change in $Changes) {
+    $relativePath = $change.Path.Trim('"')
+    if ($relativePath.Contains(" -> ")) {
+      $relativePath = ($relativePath -split " -> ")[-1]
+    }
+    $normalizedPath = $relativePath.Replace("/", "\")
+    if ([System.IO.Path]::IsPathRooted($normalizedPath) -or
+        @($normalizedPath.Split("\") | Where-Object { $_ -eq ".." }).Count -gt 0) {
+      throw "Git devolvio una ruta no valida para recuperacion: $relativePath"
+    }
+    $source = [System.IO.Path]::GetFullPath((Join-Path $AppRoot $normalizedPath))
+    $destination = [System.IO.Path]::GetFullPath((Join-Path $recoveryRoot $normalizedPath))
+    $manifest += [pscustomobject]@{ status = $change.Status; path = $relativePath }
+    if (Test-Path -LiteralPath $source -PathType Leaf) {
+      $parent = Split-Path -Parent $destination
+      New-Item -ItemType Directory -Path $parent -Force | Out-Null
+      Copy-Item -LiteralPath $source -Destination $destination -Force
+    }
+  }
+
+  $manifest | ConvertTo-Json | Set-Content `
+    -LiteralPath (Join-Path $recoveryRoot "archivos-modificados.json") `
+    -Encoding UTF8
+  return $recoveryRoot
+}
+
+function Set-LightweightSparseCheckout {
+  Invoke-Git @("sparse-checkout", "init", "--no-cone") | Out-Null
+  Invoke-Git @(
+    "sparse-checkout", "set", "--no-cone",
+    "/*",
+    "!/data/",
+    "!/tools/node/",
+    "!/tools/cloudflared/",
+    "!/tools/cloudflare-worker/",
+    "!/tools/backups/",
+    "!/tools/logs/",
+    "!/frontend/node_modules/"
+  ) | Out-Null
+}
+
 function Restore-RuntimeData($BackupRoot) {
   if (-not $BackupRoot -or -not (Test-Path -LiteralPath $BackupRoot)) {
     return
@@ -294,15 +344,12 @@ try {
     exit 0
   }
   $remoteRevision = $remoteResult.Text
+  $changes = @(Get-WorkingTreeChanges)
+  $codeChanges = @($changes | Where-Object { -not $_.Runtime })
+  $needsRepair = $codeChanges.Count -gt 0
 
-  if ($localRevision -eq $remoteRevision) {
+  if ($localRevision -eq $remoteRevision -and -not $needsRepair) {
     Write-Update "El programa ya esta actualizado."
-    exit 0
-  }
-
-  $ancestor = Invoke-Git @("merge-base", "--is-ancestor", $localRevision, $remoteRevision) -AllowFailure
-  if ($ancestor.ExitCode -ne 0) {
-    Write-Update "La copia local y GitHub tienen historiales diferentes. No se aplicara una actualizacion automatica." "Yellow"
     exit 0
   }
 
@@ -313,25 +360,34 @@ try {
     "$localRevision..$remoteRevision"
   )).Text
   if (-not $notes) {
-    $notes = "Mejoras y correcciones generales."
+    $notes = if ($needsRepair) {
+      "Reparacion de archivos modificados, faltantes o incompatibles."
+    } else {
+      "Sincronizacion completa con la version oficial."
+    }
   }
   if ($notes.Length -gt 3500) {
     $notes = $notes.Substring(0, 3500) + "`n`n... y otros cambios."
   }
 
+  $headline = if ($localRevision -eq $remoteRevision) {
+    "La instalacion necesita una reparacion."
+  } else {
+    "Hay una nueva actualizacion disponible ($commitCount cambio(s))."
+  }
   $message = @"
-Hay una nueva actualizacion disponible ($commitCount cambio(s)).
+$headline
 
-CAMBIOS DE ESTA ACTUALIZACION:
+CAMBIOS Y REPARACIONES:
 
 $notes
 
 ¿Quieres descargarla e instalarla ahora?
 
-La contabilidad, imagenes y configuracion local se conservaran.
+La contabilidad, imagenes y configuracion local se conservaran. Los archivos modificados del programa se guardaran en una carpeta de recuperacion antes de reemplazarlos.
 "@
 
-  Write-Update "Hay $commitCount actualizacion(es) disponible(s)." "Cyan"
+  Write-Update $headline "Cyan"
   Write-Host ""
   Write-Host $notes
 
@@ -349,18 +405,11 @@ La contabilidad, imagenes y configuracion local se conservaran.
     exit 0
   }
 
-  $changes = @(Get-WorkingTreeChanges)
-  $codeChanges = @($changes | Where-Object { -not $_.Runtime })
+  $recoveryRoot = ""
   if ($codeChanges.Count -gt 0) {
-    $changedNames = ($codeChanges | Select-Object -First 12 | ForEach-Object { "- $($_.Path)" }) -join "`n"
-    Show-Information @"
-La actualizacion no se aplico porque hay archivos del programa modificados manualmente:
-
-$changedNames
-
-Guarda o publica esos cambios en Git antes de actualizar.
-"@ "Actualizacion detenida"
-    exit 0
+    Write-Update "Guardando los archivos modificados antes de reparar..." "Yellow"
+    $recoveryRoot = Backup-ModifiedCode $codeChanges
+    Write-Update "Copia de recuperacion: $recoveryRoot"
   }
 
   Write-Update "Protegiendo la contabilidad y la configuracion local..."
@@ -371,41 +420,47 @@ Guarda o publica esos cambios en Git antes de actualizar.
     CreatedAt = (Get-Date).ToString("o")
   } | ConvertTo-Json | Set-Content -LiteralPath $PendingMarker -Encoding UTF8
 
-  $stashHash = ""
-  $runtimeChanges = @($changes | Where-Object { $_.Runtime })
-  if ($runtimeChanges.Count -gt 0) {
-    $stashBefore = (Invoke-Git @("rev-parse", "--verify", "refs/stash") -AllowFailure).Text
-    $stashPaths = @($runtimeChanges | ForEach-Object {
-      $path = $_.Path.Trim('"')
-      if ($path.Contains(" -> ")) {
-        $path = ($path -split " -> ")[-1]
-      }
-      $path
-    } | Select-Object -Unique)
-    $stashArguments = @("stash", "push", "--include-untracked", "--quiet", "-m", "Capitan Gold: respaldo automatico antes de actualizar", "--") + $stashPaths
-    Invoke-Git $stashArguments | Out-Null
-    $stashAfter = (Invoke-Git @("rev-parse", "--verify", "refs/stash") -AllowFailure).Text
-    if ($stashAfter -and $stashAfter -ne $stashBefore) {
-      $stashHash = $stashAfter
-    }
-  }
-
   $updateSucceeded = $false
   try {
-    Write-Update "Descargando e instalando la actualizacion..."
-    Invoke-Git @("merge", "--ff-only", $remoteRef) | Out-Null
+    Write-Update "Sincronizando y reparando la instalacion..."
+    Invoke-Git @("reset", "--hard", $remoteRef) | Out-Null
+    Set-LightweightSparseCheckout
+    Invoke-Git @(
+      "clean", "-fdx",
+      "-e", "data/",
+      "-e", "LINK_ADMIN_ONLINE.txt",
+      "-e", "tools/logs/",
+      "-e", "tools/ngrok/ngrok.exe",
+      "-e", "tools/ngrok/authtoken.txt",
+      "-e", "tools/ngrok/public-url.txt",
+      "-e", "tools/cloudflare-worker/public-url.txt"
+    ) | Out-Null
+    foreach ($requiredPath in @(
+      "server.py",
+      "tools\start-barberia.ps1",
+      "tools\update-barberia.ps1",
+      "frontend\dist\frontend\browser\index.html"
+    )) {
+      if (-not (Test-Path -LiteralPath (Join-Path $AppRoot $requiredPath))) {
+        throw "La recuperacion no encontro el archivo requerido: $requiredPath"
+      }
+    }
     $updateSucceeded = $true
   } finally {
     Restore-RuntimeData $backupRoot
-    Remove-CreatedStash $stashHash
     Remove-Item -LiteralPath $PendingMarker -Force -ErrorAction SilentlyContinue
   }
 
   if ($updateSucceeded) {
     Write-Update "Actualizacion instalada correctamente." "Green"
     if (-not $AcceptUpdate) {
+      $recoveryMessage = if ($recoveryRoot) {
+        "`n`nLos archivos locales anteriores quedaron en:`n$recoveryRoot"
+      } else {
+        ""
+      }
       Show-Information `
-        "La actualizacion se instalo correctamente.`n`nBarberia Control continuara iniciando." `
+        "La actualizacion y reparacion terminaron correctamente.`n`nBarberia Control continuara iniciando.$recoveryMessage" `
         "Actualizacion completada"
     }
   }

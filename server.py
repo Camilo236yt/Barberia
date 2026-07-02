@@ -564,7 +564,39 @@ def run_history_backup(action, history_key="", timeout=120):
         raise RuntimeError(f"Respuesta de respaldo no valida: {output}") from exc
 
 
+def write_history_backup_status(state, date_key, message):
+    DATA_DIR.mkdir(exist_ok=True)
+    payload = {
+        "state": state,
+        "date": date_key,
+        "month": date_key[:7] if date_key else "",
+        "message": message,
+        "at": now_iso(),
+    }
+    temp_path = HISTORY_BACKUP_STATUS_PATH.with_suffix(".tmp")
+    temp_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    temp_path.replace(HISTORY_BACKUP_STATUS_PATH)
+
+
+def read_history_backup_status():
+    if not HISTORY_BACKUP_STATUS_PATH.exists():
+        return {"state": "idle", "message": "Todavia no se ha ejecutado un respaldo."}
+    try:
+        status = json.loads(
+            HISTORY_BACKUP_STATUS_PATH.read_text(encoding="utf-8-sig")
+        )
+        return status if isinstance(status, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {"state": "error", "message": "No se pudo leer el estado del respaldo."}
+
+
 def queue_history_backup(date_key):
+    write_history_backup_status(
+        "queued", date_key, "Respaldo preparado. Esperando el envio a GitHub."
+    )
+
     def upload():
         try:
             run_history_backup("Upload", date_key)
@@ -584,16 +616,10 @@ def history_backup_summary():
         remote_months = run_history_backup("List").get("months", [])
     except Exception as exc:
         remote_error = str(exc)
-    status = {}
-    if HISTORY_BACKUP_STATUS_PATH.exists():
-        try:
-            status = json.loads(HISTORY_BACKUP_STATUS_PATH.read_text(encoding="utf-8-sig"))
-        except (OSError, json.JSONDecodeError):
-            status = {}
     return {
         "local_months": local_months,
         "remote_months": remote_months,
-        "status": status,
+        "status": read_history_backup_status(),
         "remote_error": remote_error,
     }
 
@@ -810,6 +836,13 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             if not role or not self.branch_scope(role):
                 return
             self.send_json(history_backup_summary())
+            return
+
+        if path == "/api/history-backup-status":
+            role = self.require_admin_role()
+            if not role or not self.branch_scope(role):
+                return
+            self.send_json({"status": read_history_backup_status()})
             return
 
         if path == "/api/events":
@@ -1270,8 +1303,8 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             write_db(db)
             write_history_archive(db, date_key)
             publish_data_change()
-            self.send_json({"closure": closure})
-        queue_history_backup(date_key)
+            queue_history_backup(date_key)
+            self.send_json({"closure": closure, "backup_date": date_key})
 
     def reopen_day(self):
         payload = self.read_json_body()
@@ -1294,8 +1327,8 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             write_db(db)
             write_history_archive(db, date_key)
             publish_data_change()
-            self.send_json({"closure": closure})
-        queue_history_backup(date_key)
+            queue_history_backup(date_key)
+            self.send_json({"closure": closure, "backup_date": date_key})
 
 
 def main():

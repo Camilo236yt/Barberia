@@ -399,6 +399,41 @@
               <button class="secondary-button" type="button" *ngIf="isCurrentDayClosed()" (click)="reopenDay()">Reabrir caja</button>
             </div>
             <p class="form-message" [class.success]="closeMessageType === 'success'" [class.error]="closeMessageType === 'error'">{{ closeMessage }}</p>
+            <div
+              class="backup-progress-card"
+              *ngIf="backupProgressVisible"
+              [class.success]="backupProgressState === 'success'"
+              [class.error]="backupProgressState === 'error'"
+            >
+              <div class="backup-progress-heading">
+                <strong>
+                  {{
+                    backupProgressState === 'success'
+                      ? 'Respaldo completado'
+                      : backupProgressState === 'error'
+                        ? 'Error en el respaldo'
+                        : backupProgressState === 'uploading'
+                          ? 'Subiendo a GitHub'
+                          : 'Preparando respaldo'
+                  }}
+                </strong>
+                <span>{{ backupProgress }}%</span>
+              </div>
+              <div
+                class="backup-progress-track"
+                role="progressbar"
+                aria-label="Progreso del respaldo de GitHub"
+                [attr.aria-valuenow]="backupProgress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <i
+                  [class.active]="backupProgressState === 'queued' || backupProgressState === 'uploading'"
+                  [style.width.%]="backupProgress"
+                ></i>
+              </div>
+              <p>{{ backupProgressMessage }}</p>
+            </div>
           </section>
 
           <section class="tool-panel">
