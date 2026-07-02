@@ -612,10 +612,10 @@
               <span class="status-pill">{{ accountingConfirmedSales().length }} ventas confirmadas</span>
             </div>
             <div class="payout-summary">
-              <div><span>Ya recibido por Nequi</span><strong>{{ formatMoney(accountingNequiReceivedByBarbers()) }}</strong></div>
-              <div><span>Entregar a la barbería por esos Nequi</span><strong>{{ formatMoney(accountingNequiShopShareTotal()) }}</strong></div>
-              <div><span>Ganancia total de los barberos</span><strong>{{ formatMoney(accountingPayrollTotal()) }}</strong></div>
-              <div><span>Total para la barbería</span><strong>{{ formatMoney(accountingShopShare()) }}</strong></div>
+              <div><span>Total pagado en efectivo</span><strong>{{ formatMoney(accountingCash()) }}</strong></div>
+              <div><span>Total pagado por Nequi</span><strong>{{ formatMoney(accountingNequi()) }}</strong></div>
+              <div><span>Para la barbería del efectivo</span><strong>{{ formatMoney(accountingCashShopShareTotal()) }}</strong></div>
+              <div><span>Para la barbería del Nequi</span><strong>{{ formatMoney(accountingNequiShopShareTotal()) }}</strong></div>
             </div>
             <div class="barber-totals payout-grid">
               <article class="barber-total-card payout-card" *ngFor="let barber of barbers; trackBy: trackById">
@@ -624,12 +624,12 @@
                   <span class="status-pill">{{ commissionPercent(barber.id) }}% para él</span>
                 </div>
                 <div class="payout-breakdown">
-                  <div class="nequi-received"><span>Total recibido por Nequi por {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberNequi(barber.id)) }}</strong></div>
-                  <div class="nequi-shop-share"><span>Descontar de ese Nequi para la barbería</span><strong>{{ formatMoney(accountingBarberNequiShopShare(barber.id)) }}</strong></div>
-                  <div><span>Facturado</span><strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong></div>
+                  <div class="cash-received"><span>Pagado en efectivo</span><strong>{{ formatMoney(accountingBarberCash(barber.id)) }}</strong></div>
+                  <div class="nequi-received"><span>Pagado por Nequi</span><strong>{{ formatMoney(accountingBarberNequi(barber.id)) }}</strong></div>
+                  <div class="cash-shop-share"><span>Para la barbería del efectivo</span><strong>{{ formatMoney(accountingBarberCashShopShare(barber.id)) }}</strong></div>
+                  <div class="nequi-shop-share"><span>Para la barbería del Nequi</span><strong>{{ formatMoney(accountingBarberNequiShopShare(barber.id)) }}</strong></div>
                   <div class="tip-share"><span>Propina</span><strong>{{ formatMoney(accountingBarberTip(barber.id)) }}</strong></div>
                   <div><span>Ganancia de {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
-                  <div><span>Para la barbería ({{ 100 - commissionPercent(barber.id) }}%)</span><strong>{{ formatMoney(accountingBarberShopShare(barber.id)) }}</strong></div>
                 </div>
                 <small>{{ accountingBarberCount(barber.id) }} servicios confirmados</small>
               </article>
@@ -751,10 +751,12 @@
             </div>
             <div class="closure-barbers" *ngIf="selectedClosureBarbers().length">
               <span *ngFor="let barber of selectedClosureBarbers()">
-                {{ barber.barber_name }}: ganancia {{ formatMoney(closureBarberCommission(barber)) }}
-                · Nequi recibido {{ formatMoney(closureBarberNequi(barber)) }}
-                · entregar a la barbería por Nequi {{ formatMoney(closureBarberNequiShopShare(barber)) }}
-                · propina {{ formatMoney(barber.tip_total || 0) }} · barbería {{ formatMoney(closureBarberShopShare(barber)) }}
+                {{ barber.barber_name }}:
+                efectivo {{ formatMoney(closureBarberCash(barber)) }}
+                · Nequi {{ formatMoney(closureBarberNequi(barber)) }}
+                · barbería del efectivo {{ formatMoney(closureBarberCashShopShare(barber)) }}
+                · barbería del Nequi {{ formatMoney(closureBarberNequiShopShare(barber)) }}
+                · propina {{ formatMoney(barber.tip_total || 0) }}
               </span>
             </div>
             <p class="form-message history-action-message" [class.success]="historyActionMessageType === 'success'" [class.error]="historyActionMessageType === 'error'" *ngIf="historyActionMessage">

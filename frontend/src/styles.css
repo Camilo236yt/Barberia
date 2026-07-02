@@ -1040,25 +1040,46 @@ th {
   color: #9a6d00;
 }
 
+.payout-breakdown .cash-received,
+.payout-breakdown .cash-shop-share,
+.payout-breakdown .nequi-received,
+.payout-breakdown .nequi-shop-share {
+  border: 1px solid #dcc58d;
+  border-radius: 7px;
+  background: #fff9e9;
+  padding: 9px;
+}
+
 .payout-breakdown .nequi-received,
 .payout-breakdown .nequi-shop-share {
   border: 1px solid #e1c6df;
-  border-radius: 7px;
   background: #fff7ff;
-  padding: 9px;
+}
+
+.payout-breakdown .cash-received strong {
+  color: var(--gold);
 }
 
 .payout-breakdown .nequi-received strong {
   color: var(--purple);
 }
 
+.payout-breakdown .cash-shop-share {
+  border-color: #bad8ca;
+  background: #f1faf6;
+}
+
+.payout-breakdown .cash-shop-share strong {
+  color: var(--green);
+}
+
 .payout-breakdown .nequi-shop-share {
-  border-color: #e3b1ad;
-  background: #fff2f1;
+  border-color: #cbb5d8;
+  background: #faf5fc;
 }
 
 .payout-breakdown .nequi-shop-share strong {
-  color: var(--red);
+  color: var(--purple);
   font-size: 1.08rem;
 }
 

@@ -57,6 +57,9 @@ interface ClosureBarber {
   base_total?: number;
   tip_total?: number;
   nequi_total?: number;
+  cash_payment_total?: number;
+  cash_base_total?: number;
+  cash_shop_share?: number;
   nequi_base_total?: number;
   nequi_shop_share?: number;
   commission: number;
@@ -1366,6 +1369,28 @@ export class App implements OnInit, OnDestroy {
     );
   }
 
+  accountingBarberCashSales(barberId: string): Sale[] {
+    return this.accountingConfirmedSales().filter(
+      (sale) => sale.barber_id === barberId && sale.payment_method === 'cash',
+    );
+  }
+
+  accountingBarberCash(barberId: string): number {
+    return this.accountingBarberCashSales(barberId).reduce(
+      (total, sale) => total + Number(sale.amount || 0),
+      0,
+    );
+  }
+
+  accountingBarberCashShopShare(barberId: string): number {
+    const cashBase = this.accountingBarberCashSales(barberId).reduce(
+      (total, sale) => total + this.saleBase(sale),
+      0,
+    );
+    const barberShare = Math.round(cashBase * this.barberCommissionRate(barberId));
+    return cashBase - barberShare;
+  }
+
   accountingBarberNequiShopShare(barberId: string): number {
     const nequiBase = this.accountingBarberNequiSales(barberId).reduce(
       (total, sale) => total + this.saleBase(sale),
@@ -1439,6 +1464,13 @@ export class App implements OnInit, OnDestroy {
     );
   }
 
+  accountingCashShopShareTotal(): number {
+    return this.barbers.reduce(
+      (total, barber) => total + this.accountingBarberCashShopShare(barber.id),
+      0,
+    );
+  }
+
   closureBarberShopShare(barber: ClosureBarber): number {
     const tip = Number(barber.tip_total || 0);
     const base = Number(barber.base_total ?? barber.total - tip);
@@ -1455,6 +1487,31 @@ export class App implements OnInit, OnDestroy {
           sale.payment_method === 'nequi',
       )
       .reduce((total, sale) => total + Number(sale.amount || 0), 0);
+  }
+
+  closureBarberCash(barber: ClosureBarber): number {
+    if (barber.cash_payment_total !== undefined) return Number(barber.cash_payment_total || 0);
+    return this.examinedSales()
+      .filter(
+        (sale) =>
+          sale.status === 'confirmed' &&
+          sale.barber_id === barber.barber_id &&
+          sale.payment_method === 'cash',
+      )
+      .reduce((total, sale) => total + Number(sale.amount || 0), 0);
+  }
+
+  closureBarberCashShopShare(barber: ClosureBarber): number {
+    if (barber.cash_shop_share !== undefined) return Number(barber.cash_shop_share || 0);
+    const cashBase = this.examinedSales()
+      .filter(
+        (sale) =>
+          sale.status === 'confirmed' &&
+          sale.barber_id === barber.barber_id &&
+          sale.payment_method === 'cash',
+      )
+      .reduce((total, sale) => total + this.saleBase(sale), 0);
+    return cashBase - Math.round(cashBase * this.closureBarberRate(barber));
   }
 
   closureBarberNequiShopShare(barber: ClosureBarber): number {

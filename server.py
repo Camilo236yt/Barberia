@@ -394,6 +394,14 @@ def closure_snapshot(db, date_key, counted_cash, branch):
         nequi_total = sum(
             sale["amount"] for sale in barber_sales if sale.get("payment_method") == "nequi"
         )
+        cash_payment_total = sum(
+            sale["amount"] for sale in barber_sales if sale.get("payment_method") == "cash"
+        )
+        cash_base_total = sum(
+            sale_base_amount(sale)
+            for sale in barber_sales
+            if sale.get("payment_method") == "cash"
+        )
         nequi_base_total = sum(
             sale_base_amount(sale)
             for sale in barber_sales
@@ -402,6 +410,7 @@ def closure_snapshot(db, date_key, counted_cash, branch):
         barber_rate = barber_commission_rate(barber)
         base_commission = int(round(base_total * barber_rate))
         commission = base_commission + tip_total
+        cash_shop_share = cash_base_total - int(round(cash_base_total * barber_rate))
         nequi_shop_share = nequi_base_total - int(round(nequi_base_total * barber_rate))
         barber_totals.append(
             {
@@ -412,6 +421,9 @@ def closure_snapshot(db, date_key, counted_cash, branch):
                 "base_total": base_total,
                 "tip_total": tip_total,
                 "nequi_total": nequi_total,
+                "cash_payment_total": cash_payment_total,
+                "cash_base_total": cash_base_total,
+                "cash_shop_share": cash_shop_share,
                 "nequi_base_total": nequi_base_total,
                 "nequi_shop_share": nequi_shop_share,
                 "commission_rate": barber_rate,
@@ -504,6 +516,14 @@ def refresh_closure_summary(db, date_key, branch):
         nequi_total = sum(
             sale["amount"] for sale in barber_sales if sale.get("payment_method") == "nequi"
         )
+        cash_payment_total = sum(
+            sale["amount"] for sale in barber_sales if sale.get("payment_method") == "cash"
+        )
+        cash_base_total = sum(
+            sale_base_amount(sale)
+            for sale in barber_sales
+            if sale.get("payment_method") == "cash"
+        )
         nequi_base_total = sum(
             sale_base_amount(sale)
             for sale in barber_sales
@@ -511,6 +531,7 @@ def refresh_closure_summary(db, date_key, branch):
         )
         base_commission = int(round(base_total * rate))
         commission = base_commission + tip_total
+        cash_shop_share = cash_base_total - int(round(cash_base_total * rate))
         nequi_shop_share = nequi_base_total - int(round(nequi_base_total * rate))
         barber_totals.append(
             {
@@ -521,6 +542,9 @@ def refresh_closure_summary(db, date_key, branch):
                 "base_total": base_total,
                 "tip_total": tip_total,
                 "nequi_total": nequi_total,
+                "cash_payment_total": cash_payment_total,
+                "cash_base_total": cash_base_total,
+                "cash_shop_share": cash_shop_share,
                 "nequi_base_total": nequi_base_total,
                 "nequi_shop_share": nequi_shop_share,
                 "commission_rate": rate,
