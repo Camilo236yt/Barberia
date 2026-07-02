@@ -1853,6 +1853,52 @@ body {
   align-items: center;
 }
 
+.activity-item.compact.shift-sale-item {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.shift-action-message {
+  margin: 0;
+}
+
+.shift-sale-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shift-sale-main > strong {
+  white-space: nowrap;
+}
+
+.shift-sale-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.shift-value-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.shift-value-editor label {
+  display: grid;
+  gap: 6px;
+}
+
+.shift-value-editor label > span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.shift-value-editor input {
+  width: 100%;
+}
+
 .accounting-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

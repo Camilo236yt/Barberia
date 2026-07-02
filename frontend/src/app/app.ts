@@ -219,6 +219,11 @@ export class App implements OnInit, OnDestroy {
 
   saleMessage = '';
   saleMessageType: 'success' | 'error' | '' = '';
+  shiftActionMessage = '';
+  shiftActionMessageType: 'success' | 'error' | '' = '';
+  editingShiftSaleId = '';
+  editingShiftAmount = 0;
+  shiftSaleSaving = false;
   closeMessage = '';
   closeMessageType: 'success' | 'error' | '' = '';
   infoMessage = '';
@@ -660,6 +665,73 @@ export class App implements OnInit, OnDestroy {
     } catch (error) {
       this.historyActionMessage = this.errorMessage(error);
       this.historyActionMessageType = 'error';
+      this.renderNow();
+    }
+  }
+
+  startShiftAmountEdit(sale: Sale): void {
+    this.editingShiftSaleId = sale.id;
+    this.editingShiftAmount = sale.amount;
+    this.shiftActionMessage = '';
+  }
+
+  cancelShiftAmountEdit(): void {
+    this.editingShiftSaleId = '';
+    this.editingShiftAmount = 0;
+  }
+
+  async confirmShiftAmountEdit(sale: Sale): Promise<void> {
+    if (this.shiftSaleSaving) return;
+    if (Number(this.editingShiftAmount) <= 0) {
+      this.shiftActionMessage = 'El valor del corte debe ser mayor a cero.';
+      this.shiftActionMessageType = 'error';
+      return;
+    }
+
+    this.shiftSaleSaving = true;
+    try {
+      await this.api(`/api/sales/${sale.id}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          barber_id: sale.barber_id,
+          service_name: sale.service_name,
+          amount: Number(this.editingShiftAmount),
+          payment_method: sale.payment_method,
+          client_name: sale.client_name || '',
+          proof_note: sale.proof_note || '',
+        }),
+      });
+      this.cancelShiftAmountEdit();
+      this.shiftActionMessage = 'Valor del corte modificado correctamente.';
+      this.shiftActionMessageType = 'success';
+      await this.loadData(true);
+    } catch (error) {
+      this.shiftActionMessage = this.errorMessage(error);
+      this.shiftActionMessageType = 'error';
+    } finally {
+      this.shiftSaleSaving = false;
+      this.renderNow();
+    }
+  }
+
+  async deleteShiftSale(sale: Sale): Promise<void> {
+    const confirmed = window.confirm(
+      `¿Eliminar este corte del resumen de turno?\n\n${sale.barber_name} · ${sale.service_name} · ${this.formatMoney(sale.amount)}\n\nEsta acción no se puede deshacer.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await this.api(`/api/sales/${sale.id}/delete`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      if (this.editingShiftSaleId === sale.id) this.cancelShiftAmountEdit();
+      this.shiftActionMessage = 'Corte eliminado correctamente.';
+      this.shiftActionMessageType = 'success';
+      await this.loadData(true);
+    } catch (error) {
+      this.shiftActionMessage = this.errorMessage(error);
+      this.shiftActionMessageType = 'error';
       this.renderNow();
     }
   }

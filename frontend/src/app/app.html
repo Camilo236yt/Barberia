@@ -316,10 +316,35 @@
               <div><span>Efectivo</span><strong>{{ formatMoney(selectedBarberCash()) }}</strong></div>
               <div><span>Nequi</span><strong>{{ formatMoney(selectedBarberNequi()) }}</strong></div>
             </div>
+            <p class="form-message shift-action-message" [class.success]="shiftActionMessageType === 'success'" [class.error]="shiftActionMessageType === 'error'" *ngIf="shiftActionMessage">
+              {{ shiftActionMessage }}
+            </p>
             <div class="activity-list" *ngIf="selectedBarberSales().length; else noBarberSales">
-              <article class="activity-item compact" *ngFor="let sale of selectedBarberSales().slice(0, 8); trackBy: trackById">
-                <div><strong>{{ sale.service_name }}</strong><span class="sale-meta">{{ timeOnly(sale.created_at) }}</span></div>
-                <strong>{{ formatMoney(sale.amount) }}</strong>
+              <article class="activity-item compact shift-sale-item" *ngFor="let sale of selectedBarberSales().slice(0, 8); trackBy: trackById">
+                <ng-container *ngIf="editingShiftSaleId !== sale.id; else shiftAmountEditor">
+                  <div class="shift-sale-main">
+                    <div><strong>{{ sale.service_name }}</strong><span class="sale-meta">{{ timeOnly(sale.created_at) }}</span></div>
+                    <strong>{{ formatMoney(sale.amount) }}</strong>
+                  </div>
+                  <div class="shift-sale-actions">
+                    <button class="small-button approve" type="button" (click)="startShiftAmountEdit(sale)">Modificar</button>
+                    <button class="small-button reject" type="button" (click)="deleteShiftSale(sale)">Eliminar</button>
+                  </div>
+                </ng-container>
+                <ng-template #shiftAmountEditor>
+                  <form class="shift-value-editor" (ngSubmit)="confirmShiftAmountEdit(sale)">
+                    <label>
+                      <span>Nuevo valor del corte</span>
+                      <input name="shiftAmount-{{ sale.id }}" type="number" min="1" step="1000" [(ngModel)]="editingShiftAmount" required>
+                    </label>
+                    <div class="shift-sale-actions">
+                      <button class="small-button approve" type="submit" [disabled]="shiftSaleSaving">
+                        {{ shiftSaleSaving ? 'Guardando...' : 'Confirmar' }}
+                      </button>
+                      <button class="small-button" type="button" [disabled]="shiftSaleSaving" (click)="cancelShiftAmountEdit()">Cancelar</button>
+                    </div>
+                  </form>
+                </ng-template>
               </article>
             </div>
             <ng-template #noBarberSales><div class="empty-state">Sin ventas hoy</div></ng-template>
