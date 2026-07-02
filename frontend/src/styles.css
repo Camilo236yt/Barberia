@@ -922,6 +922,82 @@ th {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.payout-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.payout-summary > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fafafa;
+  padding: 14px;
+}
+
+.payout-summary span,
+.payout-breakdown span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.payout-summary strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 1.25rem;
+}
+
+.payout-card {
+  display: grid;
+  gap: 12px;
+}
+
+.payout-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.payout-card-header strong {
+  margin-top: 3px;
+}
+
+.payout-card-header .status-pill {
+  color: #7a5b00;
+  background: #fff7db;
+  border-color: #e5c969;
+  white-space: nowrap;
+}
+
+.payout-breakdown {
+  display: grid;
+  gap: 7px;
+}
+
+.payout-breakdown > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 7px;
+}
+
+.payout-breakdown strong {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.payout-breakdown .barber-share strong {
+  color: #7a5b00;
+  font-size: 1.08rem;
+}
+
 .cash-diff {
   border-radius: 8px;
   background: #f4f7fb;
@@ -1169,6 +1245,10 @@ a.whatsapp-link {
   .barber-totals,
   .mini-stats,
   .closure-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payout-summary {
     grid-template-columns: 1fr;
   }
 

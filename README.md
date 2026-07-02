@@ -23,11 +23,11 @@ El programa:
 
 1. Inicia el servidor y abre `http://localhost:8000/admin`.
 2. Muestra un selector para que el administrador de la computadora principal elija su barbería.
-3. Crea un nuevo enlace privado para el segundo administrador.
+3. Crea un nuevo enlace privado de ngrok para el segundo administrador.
 4. Copia el enlace online y lo guarda en `LINK_ADMIN_ONLINE.txt`.
 5. Cuando el segundo administrador entra, solo puede elegir la barbería que no está usando el administrador local.
 
-Si una ventana anterior dejó ngrok abierto, el iniciador reutiliza o recupera esa sesión para evitar `ERR_NGROK_334`. No activa `--pooling-enabled`, porque balancear el mismo dominio entre dos computadoras podría mezclar sus datos.
+En el primer inicio por Internet, el programa abre la página oficial de ngrok y solicita el authtoken una sola vez. Después genera automáticamente una dirección nueva y evita depender de un dominio fijo que pueda quedar bloqueado. Si la credencial cambia o deja de funcionar, ejecuta `Configurar Ngrok.cmd`.
 
 El antiguo enlace de barberos y la agenda de citas continúan eliminados.
 
@@ -57,6 +57,7 @@ http://localhost:8000/admin
 - En `Facturar corte`, la opción `Servicio especial` permite escribir un nombre y precio libre para ofertas, descuentos o cobros especiales sin modificar el catálogo normal.
 - En `Contabilidad`, el calendario separa los movimientos por día: verde indica que hubo facturación, rojo que no hubo ventas y gris que la fecha todavía no ha llegado.
 - Al seleccionar un día se filtran sus totales, pagos Nequi, movimientos y comisiones.
+- La liquidación diaria indica cuánto entregar a cada barbero y cuánto conserva la barbería: Omar recibe 60 % y los demás 50 %.
 - Las asignaciones se reinician al reiniciar el servidor.
 
 ## Sedes, equipo y precios iniciales
@@ -86,6 +87,7 @@ Servicios en ambas sedes:
 Los dos iniciadores consultan la rama `main` del repositorio Git antes de abrir el sistema:
 
 - Si no hay cambios, el programa inicia normalmente.
+- Si una copia perdió su carpeta `.git`, reconstruye la conexión con GitHub y vuelve a habilitar las actualizaciones.
 - Si no hay internet, la comprobación se omite y el programa continúa.
 - Si existe una versión nueva, aparece un aviso con sus cambios y botones para actualizar ahora o posponerla.
 - Antes de actualizar se respaldan la contabilidad, los comprobantes, los tokens y la configuración local.
@@ -93,15 +95,7 @@ Los dos iniciadores consultan la rama `main` del repositorio Git antes de abrir 
 - Si hay archivos modificados, faltantes o incompatibles, se copian en `%LOCALAPPDATA%\CapitanGold\updates\recovery`, se fuerza la versión oficial y se eliminan los sobrantes.
 - Una actualización interrumpida recupera automáticamente los datos locales en el siguiente inicio.
 
-Antes de publicar por primera vez esta función, deja de seguir los datos locales que ya existían en el historial:
-
-```text
-git rm -r --cached data __pycache__ tools/logs tools/backups
-git rm --cached LINK_ADMIN_ONLINE.txt tools/ngrok/public-url.txt tools/cloudflare-worker/public-url.txt
-git rm -r --cached tools/node tools/cloudflared
-```
-
-Este paso no borra los archivos de la computadora; solamente evita que Git vuelva a publicarlos. Después, los comentarios mostrados al cliente salen del título y la descripción de cada commit. Para publicar una actualización con información clara:
+Los datos locales y los enlaces generados no se publican en GitHub. Los comentarios mostrados al cliente salen del título y la descripción de cada commit. Para publicar una actualización con información clara:
 
 ```text
 npm --prefix frontend run build
@@ -111,7 +105,7 @@ git commit -m "Título breve de la actualización" -m "Explicación de las mejor
 git push origin main
 ```
 
-Git debe estar instalado y la copia del cliente debe conservar su carpeta `.git`. Los datos privados y archivos generados están excluidos mediante `.gitignore`.
+Git debe estar instalado. Si la copia del cliente pierde su carpeta `.git`, el actualizador intenta reconstruirla automáticamente. Los datos privados y archivos generados están excluidos mediante `.gitignore`.
 
 ## Instalador liviano
 

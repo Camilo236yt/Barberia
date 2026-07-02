@@ -18,6 +18,7 @@ interface Barber {
   name: string;
   active: boolean;
   branch_id: string;
+  commission_rate?: number;
 }
 
 interface ServiceItem {
@@ -51,6 +52,8 @@ interface ClosureBarber {
   sales_count: number;
   total: number;
   commission: number;
+  commission_rate?: number;
+  shop_share?: number;
 }
 
 interface ClosureEvent {
@@ -910,7 +913,22 @@ export class App implements OnInit, OnDestroy {
   }
 
   accountingBarberCommission(barberId: string): number {
-    return this.accountingBarberTotal(barberId) * Number(this.settings.commission_rate || 0.5);
+    return Math.round(this.accountingBarberTotal(barberId) * this.barberCommissionRate(barberId));
+  }
+
+  accountingBarberShopShare(barberId: string): number {
+    return this.accountingBarberTotal(barberId) - this.accountingBarberCommission(barberId);
+  }
+
+  accountingPayrollTotal(): number {
+    return this.barbers.reduce(
+      (total, barber) => total + this.accountingBarberCommission(barber.id),
+      0,
+    );
+  }
+
+  accountingShopShare(): number {
+    return this.accountingTotal() - this.accountingPayrollTotal();
   }
 
   examinedSales(): Sale[] {
@@ -929,6 +947,22 @@ export class App implements OnInit, OnDestroy {
 
   selectedClosureBarbers(): ClosureBarber[] {
     return this.selectedClosure()?.barbers || [];
+  }
+
+  closureBarberRate(barber: ClosureBarber): number {
+    const storedRate = Number(barber.commission_rate);
+    if (storedRate > 0 && storedRate <= 1) return storedRate;
+    return barber.barber_id === 'omar' || barber.barber_name.trim().toLocaleLowerCase('es') === 'omar'
+      ? 0.6
+      : 0.5;
+  }
+
+  closureBarberCommission(barber: ClosureBarber): number {
+    return Math.round(barber.total * this.closureBarberRate(barber));
+  }
+
+  closureBarberShopShare(barber: ClosureBarber): number {
+    return barber.total - this.closureBarberCommission(barber);
   }
 
   selectExaminedClosure(closure: Closure): void {
@@ -1112,7 +1146,19 @@ export class App implements OnInit, OnDestroy {
   }
 
   barberCommission(barberId: string): number {
-    return this.barberTotal(barberId) * Number(this.settings.commission_rate || 0.5);
+    return Math.round(this.barberTotal(barberId) * this.barberCommissionRate(barberId));
+  }
+
+  barberCommissionRate(barberId: string): number {
+    const barber = this.barbers.find((item) => item.id === barberId);
+    const storedRate = Number(barber?.commission_rate);
+    if (storedRate > 0 && storedRate <= 1) return storedRate;
+    if (barber?.id === 'omar' || barber?.name.trim().toLocaleLowerCase('es') === 'omar') return 0.6;
+    return Number(this.settings.commission_rate || 0.5);
+  }
+
+  commissionPercent(barberId: string): number {
+    return Math.round(this.barberCommissionRate(barberId) * 100);
   }
 
   orderedClosures(): Closure[] {

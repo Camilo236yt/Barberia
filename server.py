@@ -47,12 +47,12 @@ DEFAULT_DB = {
         {"id": "barberia-2", "name": "Barbería de Abajo", "active": True},
     ],
     "barbers": [
-        {"id": "jose", "name": "Jose", "active": True, "branch_id": "barberia-1"},
-        {"id": "luis", "name": "Luís", "active": True, "branch_id": "barberia-1"},
-        {"id": "samuel", "name": "Samuel", "active": True, "branch_id": "barberia-1"},
-        {"id": "omar", "name": "Omar", "active": True, "branch_id": "barberia-2"},
-        {"id": "randy", "name": "Randy", "active": True, "branch_id": "barberia-2"},
-        {"id": "juan", "name": "Juan", "active": True, "branch_id": "barberia-2"},
+        {"id": "jose", "name": "Jose", "active": True, "branch_id": "barberia-1", "commission_rate": 0.5},
+        {"id": "luis", "name": "Luís", "active": True, "branch_id": "barberia-1", "commission_rate": 0.5},
+        {"id": "samuel", "name": "Samuel", "active": True, "branch_id": "barberia-1", "commission_rate": 0.5},
+        {"id": "omar", "name": "Omar", "active": True, "branch_id": "barberia-2", "commission_rate": 0.6},
+        {"id": "randy", "name": "Randy", "active": True, "branch_id": "barberia-2", "commission_rate": 0.5},
+        {"id": "juan", "name": "Juan", "active": True, "branch_id": "barberia-2", "commission_rate": 0.5},
     ],
     "services": [
         {"id": "tijeras", "name": "Corte con tijeras", "price": 25000, "branch_id": "barberia-1"},
@@ -185,6 +185,20 @@ def read_db():
             data[collection_name].extend(clones)
             changed = True
 
+    for barber in data["barbers"]:
+        default_rate = 0.6 if (
+            barber.get("id") == "omar" or barber.get("name", "").strip().casefold() == "omar"
+        ) else 0.5
+        try:
+            commission_rate = float(barber.get("commission_rate", default_rate))
+        except (TypeError, ValueError):
+            commission_rate = default_rate
+        if commission_rate <= 0 or commission_rate > 1:
+            commission_rate = default_rate
+        if barber.get("commission_rate") != commission_rate:
+            barber["commission_rate"] = commission_rate
+            changed = True
+
     for closure in data["closures"]:
         if not closure.get("branch_id"):
             closure["branch_id"] = "barberia-1"
@@ -279,6 +293,17 @@ def parse_counted_cash(value):
     return amount
 
 
+def barber_commission_rate(barber):
+    default_rate = 0.6 if (
+        barber.get("id") == "omar" or barber.get("name", "").strip().casefold() == "omar"
+    ) else 0.5
+    try:
+        rate = float(barber.get("commission_rate", default_rate))
+    except (TypeError, ValueError):
+        rate = default_rate
+    return rate if 0 < rate <= 1 else default_rate
+
+
 def closure_snapshot(db, date_key, counted_cash, branch):
     sales = [
         sale
@@ -300,13 +325,17 @@ def closure_snapshot(db, date_key, counted_cash, branch):
             continue
         barber_sales = [sale for sale in confirmed if sale.get("barber_id") == barber["id"]]
         total = sum(sale["amount"] for sale in barber_sales)
+        barber_rate = barber_commission_rate(barber)
+        commission = int(round(total * barber_rate))
         barber_totals.append(
             {
                 "barber_id": barber["id"],
                 "barber_name": barber["name"],
                 "sales_count": len(barber_sales),
                 "total": total,
-                "commission": int(round(total * commission_rate)),
+                "commission_rate": barber_rate,
+                "commission": commission,
+                "shop_share": total - commission,
             }
         )
 
@@ -1062,6 +1091,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 "name": name,
                 "active": True,
                 "branch_id": branch_id,
+                "commission_rate": 0.6 if name.casefold() == "omar" else 0.5,
             }
             db["barbers"].append(barber)
             write_db(db)
@@ -1086,6 +1116,8 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             ):
                 raise ValueError("Ya existe un barbero con ese nombre.")
             barber["name"] = name
+            if name.casefold() == "omar":
+                barber["commission_rate"] = 0.6
             write_db(db)
         publish_data_change()
         self.send_json({"barber": barber})

@@ -471,12 +471,26 @@
           </section>
 
           <section class="tool-panel full-span">
-            <div class="panel-heading"><div><p>Comisiones · {{ accountingDate }}</p><h2>Producción del equipo</h2></div></div>
-            <div class="barber-totals">
-              <article class="barber-total-card" *ngFor="let barber of barbers; trackBy: trackById">
-                <span>{{ barber.name }}</span>
-                <strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong>
-                <small>{{ accountingBarberCount(barber.id) }} cortes · Comisión {{ formatMoney(accountingBarberCommission(barber.id)) }}</small>
+            <div class="panel-heading">
+              <div><p>Liquidación · {{ accountingDate }}</p><h2>Cuánto pagar a cada barbero</h2></div>
+              <span class="status-pill">{{ accountingConfirmedSales().length }} ventas confirmadas</span>
+            </div>
+            <div class="payout-summary">
+              <div><span>Total para los barberos</span><strong>{{ formatMoney(accountingPayrollTotal()) }}</strong></div>
+              <div><span>Total para la barbería</span><strong>{{ formatMoney(accountingShopShare()) }}</strong></div>
+            </div>
+            <div class="barber-totals payout-grid">
+              <article class="barber-total-card payout-card" *ngFor="let barber of barbers; trackBy: trackById">
+                <div class="payout-card-header">
+                  <div><span>Barbero</span><strong>{{ barber.name }}</strong></div>
+                  <span class="status-pill">{{ commissionPercent(barber.id) }}% para él</span>
+                </div>
+                <div class="payout-breakdown">
+                  <div><span>Facturado</span><strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong></div>
+                  <div class="barber-share"><span>Entregar a {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
+                  <div><span>Para la barbería ({{ 100 - commissionPercent(barber.id) }}%)</span><strong>{{ formatMoney(accountingBarberShopShare(barber.id)) }}</strong></div>
+                </div>
+                <small>{{ accountingBarberCount(barber.id) }} servicios confirmados</small>
               </article>
             </div>
           </section>
@@ -595,7 +609,10 @@
               <div><span>Comprobantes</span><strong>{{ examinedNequiSales().length }}</strong></div>
             </div>
             <div class="closure-barbers" *ngIf="selectedClosureBarbers().length">
-              <span *ngFor="let barber of selectedClosureBarbers()">{{ barber.barber_name }}: {{ formatMoney(barber.total) }} · comisión {{ formatMoney(barber.commission) }}</span>
+              <span *ngFor="let barber of selectedClosureBarbers()">
+                {{ barber.barber_name }}: entregar {{ formatMoney(closureBarberCommission(barber)) }}
+                ({{ closureBarberRate(barber) * 100 | number:'1.0-0' }}%) · barbería {{ formatMoney(closureBarberShopShare(barber)) }}
+              </span>
             </div>
             <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedSales(), showBranch: false }"></ng-container>
           </section>

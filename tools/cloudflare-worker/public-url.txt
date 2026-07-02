@@ -1,1 +1,0 @@
-https://barberia-ngrok-proxy.TU_SUBDOMINIO.workers.dev

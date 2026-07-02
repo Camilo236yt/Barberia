@@ -3,6 +3,7 @@ param(
   [switch]$NoPause,
   [switch]$CheckOnly,
   [switch]$Internet,
+  [switch]$ConfigureNgrok,
   [switch]$SkipUpdateCheck
 )
 
@@ -177,7 +178,70 @@ function Install-NgrokIfMissing {
   }
 }
 
-function Find-NgrokEndpointProcess($EndpointHost) {
+function Test-NgrokProfileConfiguration {
+  $previousErrorPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    & $NgrokExe config check *> $null
+    return $LASTEXITCODE -eq 0
+  } finally {
+    $ErrorActionPreference = $previousErrorPreference
+  }
+}
+
+function Read-SecretText($Prompt) {
+  $secureValue = Read-Host $Prompt -AsSecureString
+  $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureValue)
+  try {
+    return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+  } finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+  }
+}
+
+function Initialize-NgrokConfiguration([switch]$Force) {
+  Install-NgrokIfMissing
+
+  if (-not $Force -and (Test-Path -LiteralPath $NgrokTokenPath)) {
+    $savedToken = (Get-Content -LiteralPath $NgrokTokenPath -Raw).Trim()
+    if ($savedToken) {
+      return [pscustomobject]@{ Token = $savedToken; Source = "local" }
+    }
+  }
+  if (-not $Force -and (Test-NgrokProfileConfiguration)) {
+    return [pscustomobject]@{ Token = ""; Source = "profile" }
+  }
+
+  Write-Host ""
+  Write-Step "ngrok necesita vincular esta computadora con la cuenta."
+  Write-Step "Se abrira la pagina oficial para copiar el authtoken."
+  try {
+    Start-Process "https://dashboard.ngrok.com/get-started/your-authtoken"
+  } catch {
+  }
+  $token = (Read-SecretText "Pega el authtoken de ngrok y presiona Enter").Trim()
+  if ($token.Length -lt 20 -or $token -match "\s") {
+    throw "El authtoken de ngrok esta vacio o no tiene un formato valido."
+  }
+
+  $previousErrorPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    & $NgrokExe config add-authtoken $token | Out-Null
+    $configExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorPreference
+    $token = $null
+  }
+  if ($configExitCode -ne 0 -or -not (Test-NgrokProfileConfiguration)) {
+    throw "ngrok no pudo guardar o validar el authtoken."
+  }
+  Remove-Item -LiteralPath $NgrokTokenPath -Force -ErrorAction SilentlyContinue
+  Write-Step "Configuracion de ngrok guardada correctamente."
+  return [pscustomobject]@{ Token = ""; Source = "profile" }
+}
+
+function Find-NgrokEndpointProcess {
   $expectedPath = [System.IO.Path]::GetFullPath($NgrokExe)
   $matches = @()
   foreach ($processInfo in Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) {
@@ -185,9 +249,9 @@ function Find-NgrokEndpointProcess($EndpointHost) {
       continue
     }
     $processPath = [System.IO.Path]::GetFullPath($processInfo.ExecutablePath)
-    $usesEndpoint = $processInfo.CommandLine.Contains("--url=$EndpointHost") -or
-      $processInfo.CommandLine.Contains("--url=https://$EndpointHost")
-    if ($processPath -eq $expectedPath -and $usesEndpoint) {
+    $servesHttp = $processInfo.CommandLine -match "(^|\s)http(\s|$)"
+    $usesPort = $processInfo.CommandLine -match "(^|\s)$Port(\s|$)"
+    if ($processPath -eq $expectedPath -and $servesHttp -and $usesPort) {
       $parentIsRunning = $null -ne (
         Get-Process -Id $processInfo.ParentProcessId -ErrorAction SilentlyContinue
       )
@@ -200,16 +264,39 @@ function Find-NgrokEndpointProcess($EndpointHost) {
   return @($matches | Where-Object { $_.Process })
 }
 
-function Start-NgrokTunnel($EndpointHost, $StdoutLog, $StderrLog) {
+function Start-NgrokTunnel($StdoutLog, $StderrLog) {
   Set-Content -LiteralPath $StdoutLog -Value "" -Encoding UTF8
   Set-Content -LiteralPath $StderrLog -Value "" -Encoding UTF8
   return Start-Process -FilePath $NgrokExe `
-    -ArgumentList @("http", "--url=$EndpointHost", "$Port") `
+    -ArgumentList @("http", "$Port") `
     -WorkingDirectory $AppRoot `
     -WindowStyle Hidden `
     -RedirectStandardOutput $StdoutLog `
     -RedirectStandardError $StderrLog `
     -PassThru
+}
+
+function Wait-NgrokPublicUrl($TunnelProcess) {
+  for ($attempt = 0; $attempt -lt 40; $attempt++) {
+    if ($TunnelProcess -and $TunnelProcess.HasExited) {
+      return ""
+    }
+    try {
+      $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 2
+      $tunnel = @($response.tunnels) |
+        Where-Object {
+          $_.public_url -like "https://*" -and
+          "$($_.config.addr)" -match "(localhost|127\.0\.0\.1):$Port/?$"
+        } |
+        Select-Object -First 1
+      if ($tunnel.public_url) {
+        return "$($tunnel.public_url)".TrimEnd("/")
+      }
+    } catch {
+    }
+    Start-Sleep -Milliseconds 250
+  }
+  return ""
 }
 
 function Get-PortListener {
@@ -251,6 +338,12 @@ try {
   Set-Location $AppRoot
   if (-not (Test-Path "server.py")) {
     throw "No se encontro server.py en $AppRoot."
+  }
+
+  if ($ConfigureNgrok) {
+    Initialize-NgrokConfiguration -Force | Out-Null
+    Write-Step "ngrok quedo listo. Ya puedes usar Iniciar Barberia Internet.cmd."
+    exit 0
   }
 
   if (-not $SkipUpdateCheck) {
@@ -307,21 +400,18 @@ try {
   $ownsTunnelProcess = $false
   try {
     if ($Internet) {
-      Install-NgrokIfMissing
-      if (-not (Test-Path $NgrokTokenPath) -or -not (Test-Path $NgrokPublicUrlPath)) {
-        throw "Falta la configuracion de ngrok en tools\ngrok."
+      $ngrokConfiguration = Initialize-NgrokConfiguration
+      if ($ngrokConfiguration.Token) {
+        $env:NGROK_AUTHTOKEN = $ngrokConfiguration.Token
+      } else {
+        Remove-Item Env:NGROK_AUTHTOKEN -ErrorAction SilentlyContinue
       }
-
-      $ngrokToken = (Get-Content -LiteralPath $NgrokTokenPath -Raw).Trim()
-      $ngrokPublicUrl = (Get-Content -LiteralPath $NgrokPublicUrlPath -Raw).Trim().TrimEnd("/")
-      $ngrokHost = ([uri]$ngrokPublicUrl).Host
-      $env:NGROK_AUTHTOKEN = $ngrokToken
       $logDir = Join-Path $AppRoot "tools\logs"
       New-Item -ItemType Directory -Path $logDir -Force | Out-Null
       $stdoutLog = Join-Path $logDir "admin-online-out.log"
       $stderrLog = Join-Path $logDir "admin-online-err.log"
 
-      $existingTunnels = @(Find-NgrokEndpointProcess $ngrokHost)
+      $existingTunnels = @(Find-NgrokEndpointProcess)
       if ($existingTunnels.Count -gt 0) {
         $existingTunnel = $existingTunnels[0]
         $tunnelProcess = $existingTunnel.Process
@@ -333,35 +423,27 @@ try {
         })
       } else {
         Write-Step "Creando el nuevo enlace administrativo online..."
-        $tunnelProcess = Start-NgrokTunnel $ngrokHost $stdoutLog $stderrLog
+        $tunnelProcess = Start-NgrokTunnel $stdoutLog $stderrLog
         $ownsTunnelProcess = $true
-        Start-Sleep -Seconds 2
-        if ($tunnelProcess.HasExited) {
-          $ngrokError = if (Test-Path -LiteralPath $stderrLog) {
-            ("$(Get-Content -LiteralPath $stderrLog -Raw)").Trim()
-          } else {
-            ""
-          }
-          if ($ngrokError -match "ERR_NGROK_334") {
-            Write-Step "El dominio estaba liberando una sesion anterior. Reintentando..."
-            Start-Sleep -Seconds 3
-            $tunnelProcess = Start-NgrokTunnel $ngrokHost $stdoutLog $stderrLog
-            Start-Sleep -Seconds 2
-          }
-          if ($tunnelProcess.HasExited) {
-            $ngrokError = if (Test-Path -LiteralPath $stderrLog) {
-              ("$(Get-Content -LiteralPath $stderrLog -Raw)").Trim()
-            } else {
-              ""
-            }
-            if ($ngrokError -match "ERR_NGROK_334") {
-              throw "El dominio de ngrok sigue abierto en otra computadora o sesion. Cierralo desde el panel de ngrok y vuelve a iniciar. No se activo pooling para evitar mezclar datos de dos barberias."
-            }
-            throw "ngrok no pudo crear el enlace online. Revisa $stderrLog."
-          }
-        }
       }
 
+      $ngrokPublicUrl = Wait-NgrokPublicUrl $tunnelProcess
+      if (-not $ngrokPublicUrl) {
+        $ngrokError = if (Test-Path -LiteralPath $stderrLog) {
+          ("$(Get-Content -LiteralPath $stderrLog -Raw)").Trim()
+        } else {
+          ""
+        }
+        if ($ngrokError) {
+          throw "ngrok no pudo crear el enlace online: $ngrokError"
+        }
+        throw "ngrok no pudo crear el enlace online. Ejecuta Configurar Ngrok.cmd para renovar el acceso."
+      }
+      [System.IO.File]::WriteAllText(
+        $NgrokPublicUrlPath,
+        $ngrokPublicUrl + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false)
+      )
       $onlineUrl = Get-OnlineAdminLink
       if (-not $onlineUrl) {
         throw "No se pudo construir el enlace administrativo online."
@@ -375,6 +457,8 @@ try {
       try { Set-Clipboard -Value $onlineUrl } catch {}
       Show-Accesses $onlineUrl
     } else {
+      Write-Step "Modo local activo: ngrok no se inicia con este archivo."
+      Write-Step "Para crear el enlace online usa Iniciar Barberia Internet.cmd."
       Show-Accesses
     }
 
