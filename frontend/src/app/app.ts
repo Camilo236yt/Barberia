@@ -57,6 +57,8 @@ interface ClosureBarber {
   base_total?: number;
   tip_total?: number;
   nequi_total?: number;
+  nequi_base_total?: number;
+  nequi_shop_share?: number;
   commission: number;
   commission_rate?: number;
   shop_share?: number;
@@ -1364,12 +1366,13 @@ export class App implements OnInit, OnDestroy {
     );
   }
 
-  accountingBarberSettlement(barberId: string): number {
-    return this.accountingBarberCommission(barberId) - this.accountingBarberNequi(barberId);
-  }
-
-  accountingBarberSettlementAmount(barberId: string): number {
-    return Math.abs(this.accountingBarberSettlement(barberId));
+  accountingBarberNequiShopShare(barberId: string): number {
+    const nequiBase = this.accountingBarberNequiSales(barberId).reduce(
+      (total, sale) => total + this.saleBase(sale),
+      0,
+    );
+    const barberShare = Math.round(nequiBase * this.barberCommissionRate(barberId));
+    return nequiBase - barberShare;
   }
 
   accountingBarberShopShare(barberId: string): number {
@@ -1429,16 +1432,9 @@ export class App implements OnInit, OnDestroy {
     );
   }
 
-  accountingCashToPay(): number {
+  accountingNequiShopShareTotal(): number {
     return this.barbers.reduce(
-      (total, barber) => total + Math.max(0, this.accountingBarberSettlement(barber.id)),
-      0,
-    );
-  }
-
-  accountingCashToRecover(): number {
-    return this.barbers.reduce(
-      (total, barber) => total + Math.max(0, -this.accountingBarberSettlement(barber.id)),
+      (total, barber) => total + this.accountingBarberNequiShopShare(barber.id),
       0,
     );
   }
@@ -1461,12 +1457,17 @@ export class App implements OnInit, OnDestroy {
       .reduce((total, sale) => total + Number(sale.amount || 0), 0);
   }
 
-  closureBarberSettlement(barber: ClosureBarber): number {
-    return this.closureBarberCommission(barber) - this.closureBarberNequi(barber);
-  }
-
-  closureBarberSettlementAmount(barber: ClosureBarber): number {
-    return Math.abs(this.closureBarberSettlement(barber));
+  closureBarberNequiShopShare(barber: ClosureBarber): number {
+    if (barber.nequi_shop_share !== undefined) return Number(barber.nequi_shop_share || 0);
+    const nequiBase = this.examinedSales()
+      .filter(
+        (sale) =>
+          sale.status === 'confirmed' &&
+          sale.barber_id === barber.barber_id &&
+          sale.payment_method === 'nequi',
+      )
+      .reduce((total, sale) => total + this.saleBase(sale), 0);
+    return nequiBase - Math.round(nequiBase * this.closureBarberRate(barber));
   }
 
   selectExaminedClosure(closure: Closure): void {

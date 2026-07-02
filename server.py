@@ -394,9 +394,15 @@ def closure_snapshot(db, date_key, counted_cash, branch):
         nequi_total = sum(
             sale["amount"] for sale in barber_sales if sale.get("payment_method") == "nequi"
         )
+        nequi_base_total = sum(
+            sale_base_amount(sale)
+            for sale in barber_sales
+            if sale.get("payment_method") == "nequi"
+        )
         barber_rate = barber_commission_rate(barber)
         base_commission = int(round(base_total * barber_rate))
         commission = base_commission + tip_total
+        nequi_shop_share = nequi_base_total - int(round(nequi_base_total * barber_rate))
         barber_totals.append(
             {
                 "barber_id": barber["id"],
@@ -406,6 +412,8 @@ def closure_snapshot(db, date_key, counted_cash, branch):
                 "base_total": base_total,
                 "tip_total": tip_total,
                 "nequi_total": nequi_total,
+                "nequi_base_total": nequi_base_total,
+                "nequi_shop_share": nequi_shop_share,
                 "commission_rate": barber_rate,
                 "commission": commission,
                 "shop_share": base_total - base_commission,
@@ -496,8 +504,14 @@ def refresh_closure_summary(db, date_key, branch):
         nequi_total = sum(
             sale["amount"] for sale in barber_sales if sale.get("payment_method") == "nequi"
         )
+        nequi_base_total = sum(
+            sale_base_amount(sale)
+            for sale in barber_sales
+            if sale.get("payment_method") == "nequi"
+        )
         base_commission = int(round(base_total * rate))
         commission = base_commission + tip_total
+        nequi_shop_share = nequi_base_total - int(round(nequi_base_total * rate))
         barber_totals.append(
             {
                 "barber_id": barber_id,
@@ -507,6 +521,8 @@ def refresh_closure_summary(db, date_key, branch):
                 "base_total": base_total,
                 "tip_total": tip_total,
                 "nequi_total": nequi_total,
+                "nequi_base_total": nequi_base_total,
+                "nequi_shop_share": nequi_shop_share,
                 "commission_rate": rate,
                 "commission": commission,
                 "shop_share": base_total - base_commission,

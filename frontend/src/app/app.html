@@ -612,10 +612,9 @@
               <span class="status-pill">{{ accountingConfirmedSales().length }} ventas confirmadas</span>
             </div>
             <div class="payout-summary">
-              <div><span>Ganancia total de los barberos</span><strong>{{ formatMoney(accountingPayrollTotal()) }}</strong></div>
               <div><span>Ya recibido por Nequi</span><strong>{{ formatMoney(accountingNequiReceivedByBarbers()) }}</strong></div>
-              <div><span>Entregar en efectivo</span><strong>{{ formatMoney(accountingCashToPay()) }}</strong></div>
-              <div><span>Recibir de los barberos</span><strong>{{ formatMoney(accountingCashToRecover()) }}</strong></div>
+              <div><span>Entregar a la barbería por esos Nequi</span><strong>{{ formatMoney(accountingNequiShopShareTotal()) }}</strong></div>
+              <div><span>Ganancia total de los barberos</span><strong>{{ formatMoney(accountingPayrollTotal()) }}</strong></div>
               <div><span>Total para la barbería</span><strong>{{ formatMoney(accountingShopShare()) }}</strong></div>
             </div>
             <div class="barber-totals payout-grid">
@@ -625,16 +624,11 @@
                   <span class="status-pill">{{ commissionPercent(barber.id) }}% para él</span>
                 </div>
                 <div class="payout-breakdown">
+                  <div class="nequi-received"><span>Recibió por Nequi</span><strong>{{ formatMoney(accountingBarberNequi(barber.id)) }}</strong></div>
+                  <div class="nequi-shop-share"><span>Debe entregar a la barbería por esos Nequi</span><strong>{{ formatMoney(accountingBarberNequiShopShare(barber.id)) }}</strong></div>
                   <div><span>Facturado</span><strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong></div>
                   <div class="tip-share"><span>Propina</span><strong>{{ formatMoney(accountingBarberTip(barber.id)) }}</strong></div>
                   <div><span>Ganancia de {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
-                  <div class="nequi-deduction"><span>Menos: ya recibió por Nequi</span><strong>− {{ formatMoney(accountingBarberNequi(barber.id)) }}</strong></div>
-                  <div class="barber-share" [class.settlement-negative]="accountingBarberSettlement(barber.id) < 0">
-                    <span>
-                      {{ accountingBarberSettlement(barber.id) >= 0 ? 'Entregar en efectivo a ' + barber.name : barber.name + ' debe entregar a la barbería' }}
-                    </span>
-                    <strong>{{ formatMoney(accountingBarberSettlementAmount(barber.id)) }}</strong>
-                  </div>
                   <div><span>Para la barbería ({{ 100 - commissionPercent(barber.id) }}%)</span><strong>{{ formatMoney(accountingBarberShopShare(barber.id)) }}</strong></div>
                 </div>
                 <div class="barber-nequi-list" *ngIf="accountingBarberNequiSales(barber.id).length">
@@ -766,8 +760,7 @@
               <span *ngFor="let barber of selectedClosureBarbers()">
                 {{ barber.barber_name }}: ganancia {{ formatMoney(closureBarberCommission(barber)) }}
                 · Nequi recibido {{ formatMoney(closureBarberNequi(barber)) }}
-                · {{ closureBarberSettlement(barber) >= 0 ? 'entregar en efectivo' : 'debe entregar a la barbería' }}
-                {{ formatMoney(closureBarberSettlementAmount(barber)) }}
+                · entregar a la barbería por Nequi {{ formatMoney(closureBarberNequiShopShare(barber)) }}
                 · propina {{ formatMoney(barber.tip_total || 0) }} · barbería {{ formatMoney(closureBarberShopShare(barber)) }}
               </span>
             </div>

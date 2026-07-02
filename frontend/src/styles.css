@@ -1036,30 +1036,30 @@ th {
   font-size: 0.95rem;
 }
 
-.payout-breakdown .barber-share strong {
-  color: #7a5b00;
-  font-size: 1.08rem;
-}
-
 .payout-breakdown .tip-share strong {
   color: #9a6d00;
 }
 
-.payout-breakdown .nequi-deduction strong,
-.payout-breakdown .settlement-negative strong {
-  color: var(--red);
-}
-
-.payout-breakdown .barber-share {
-  border: 1px solid #dcc58d;
+.payout-breakdown .nequi-received,
+.payout-breakdown .nequi-shop-share {
+  border: 1px solid #e1c6df;
   border-radius: 7px;
-  background: #fff9e9;
+  background: #fff7ff;
   padding: 9px;
 }
 
-.payout-breakdown .barber-share.settlement-negative {
+.payout-breakdown .nequi-received strong {
+  color: var(--purple);
+}
+
+.payout-breakdown .nequi-shop-share {
   border-color: #e3b1ad;
   background: #fff2f1;
+}
+
+.payout-breakdown .nequi-shop-share strong {
+  color: var(--red);
+  font-size: 1.08rem;
 }
 
 .barber-nequi-list {
