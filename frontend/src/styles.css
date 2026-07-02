@@ -1928,6 +1928,51 @@ body {
   gap: 16px;
 }
 
+.history-calendar-panel,
+.history-backup-panel {
+  margin-bottom: 16px;
+}
+
+.backup-explanation {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.history-month-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 9px;
+}
+
+.history-month-buttons button {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #d4bd85;
+  border-radius: 9px;
+  background: #fffdf8;
+  color: var(--ink);
+  padding: 10px 12px;
+}
+
+.history-month-buttons button span {
+  color: #75581e;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.history-month-buttons button.downloaded {
+  border-color: #b8d8c9;
+  background: #f0f8f4;
+}
+
+.history-month-buttons button.downloaded span {
+  color: var(--green);
+}
+
 .history-list-panel {
   max-height: 760px;
   overflow-y: auto;

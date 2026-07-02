@@ -94,17 +94,41 @@ Antes de publicar por primera vez esta función, deja de seguir los datos locale
 ```text
 git rm -r --cached data __pycache__ tools/logs tools/backups
 git rm --cached LINK_ADMIN_ONLINE.txt tools/ngrok/public-url.txt tools/cloudflare-worker/public-url.txt
+git rm -r --cached tools/node tools/cloudflared
 ```
 
 Este paso no borra los archivos de la computadora; solamente evita que Git vuelva a publicarlos. Después, los comentarios mostrados al cliente salen del título y la descripción de cada commit. Para publicar una actualización con información clara:
 
 ```text
+npm --prefix frontend run build
 git add .
+git add -f frontend/dist
 git commit -m "Título breve de la actualización" -m "Explicación de las mejoras y correcciones para el cliente."
 git push origin main
 ```
 
 Git debe estar instalado y la copia del cliente debe conservar su carpeta `.git`. Los datos privados y archivos generados están excluidos mediante `.gitignore`.
+
+## Instalador liviano
+
+Entrega al cliente `Instalar Barberia.cmd` junto con `Instalar Barberia.ps1`. El instalador:
+
+- Clona únicamente la versión más reciente de `main`.
+- Omite Node, Cloudflared, dependencias de desarrollo, registros y datos.
+- No descarga la rama `historial-datos` ni los meses anteriores.
+- Instala el programa en `%LOCALAPPDATA%\CapitanGold\Barberia`.
+- Crea accesos directos para el modo local y el modo Internet.
+- Descarga ngrok desde su fuente oficial solamente al necesitar el acceso online.
+
+El panel compilado se publica en `frontend/dist`, por lo que la computadora del cliente no necesita Node ni las dependencias Angular de desarrollo.
+
+## Respaldos mensuales en GitHub
+
+Al cerrar o reabrir una caja, el servidor crea `data/history-archives/AAAA-MM-DD.zip` con las ventas, cierres, configuración y comprobantes del día. Después lo sube automáticamente a la rama independiente `historial-datos`, sin cambiar `main`. Los días se agrupan por mes en la interfaz y se descargan juntos para evitar archivos demasiado grandes.
+
+En `Historial > Buscar respaldos` aparecen los meses disponibles. Un mes remoto solo se descarga cuando el administrador pulsa `Descargar`; entonces sus cierres aparecen en el calendario y sus comprobantes vuelven a estar disponibles.
+
+El repositorio debe ser privado y la cuenta configurada en Git debe tener permiso de escritura. Si no hay conexión o autenticación, el ZIP permanece local y la pantalla muestra el estado del respaldo.
 
 ## Seguridad
 
@@ -116,3 +140,5 @@ El enlace online contiene un token privado generado por el sistema. No debe comp
 - Los comprobantes se guardan en `data/uploads`.
 
 Para apagar el sistema, cierra la ventana del arrancador o usa `Ctrl+C`.
+
+También puedes cerrar la pestaña administrativa local del navegador. El sistema espera unos segundos para distinguir una recarga normal y después apaga automáticamente el servidor, el enlace online y la ventana del iniciador. Cerrar únicamente la pestaña del administrador online no apaga la computadora principal.

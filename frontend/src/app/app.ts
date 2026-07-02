@@ -107,6 +107,18 @@ interface AdminOptionsResponse {
   branches: Branch[];
 }
 
+interface HistoryBackupResponse {
+  local_months: string[];
+  remote_months: string[];
+  status?: {
+    state?: 'uploading' | 'success' | 'error';
+    month?: string;
+    message?: string;
+    at?: string;
+  };
+  remote_error?: string;
+}
+
 interface ChartPoint {
   key: string;
   label: string;
@@ -162,6 +174,12 @@ export class App implements OnInit, OnDestroy {
   examinedBranchId = '';
   accountingDate = this.todayKey();
   accountingMonthKey = this.todayKey().slice(0, 7);
+  historyMonthKey = this.todayKey().slice(0, 7);
+  localHistoryMonths: string[] = [];
+  remoteHistoryMonths: string[] = [];
+  historyBackupLoading = false;
+  historyBackupMessage = '';
+  historyBackupMessageType: 'success' | 'error' | '' = '';
 
   saleForm = {
     barber_id: '',
@@ -183,14 +201,19 @@ export class App implements OnInit, OnDestroy {
   infoMessage = '';
   infoMessageType: 'success' | 'error' | '' = '';
   private refreshTimer?: number;
+  private localSessionTimer?: number;
+  private localSessionId = '';
   private eventSource?: EventSource;
   private messageTimers: number[] = [];
   private destroyed = false;
+  private readonly localPageHideHandler = () => this.closeLocalSession();
+  private readonly localPageShowHandler = () => this.startLocalSession();
 
   constructor(private readonly changeDetector: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.detectPortalMode();
+    this.startLocalSession();
     this.loadAdminOptions();
     this.connectRealtime();
     this.refreshTimer = window.setInterval(() => {
@@ -202,6 +225,9 @@ export class App implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroyed = true;
     if (this.refreshTimer) window.clearInterval(this.refreshTimer);
+    this.closeLocalSession();
+    window.removeEventListener('pagehide', this.localPageHideHandler);
+    window.removeEventListener('pageshow', this.localPageShowHandler);
     this.eventSource?.close();
     this.messageTimers.forEach((timer) => window.clearTimeout(timer));
   }
@@ -212,6 +238,55 @@ export class App implements OnInit, OnDestroy {
     this.adminRole = path.startsWith('/admin/online') ? 'online' : 'local';
     this.adminToken = this.adminRole === 'online' ? params.get('token') || '' : '';
     this.selectedView = 'dashboard';
+  }
+
+  private startLocalSession(): void {
+    const hostname = window.location.hostname.toLowerCase();
+    const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(hostname);
+    if (this.adminRole !== 'local' || !isLocalHost || this.localSessionTimer) return;
+
+    this.localSessionId =
+      window.crypto?.randomUUID?.() ||
+      `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+
+    const heartbeat = () => {
+      if (!this.localSessionId) return;
+      void fetch('/api/local-ui/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: this.localSessionId }),
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
+    heartbeat();
+    this.localSessionTimer = window.setInterval(heartbeat, 3000);
+    window.addEventListener('pagehide', this.localPageHideHandler);
+    window.addEventListener('pageshow', this.localPageShowHandler);
+  }
+
+  private closeLocalSession(): void {
+    if (this.localSessionTimer) {
+      window.clearInterval(this.localSessionTimer);
+      this.localSessionTimer = undefined;
+    }
+    if (!this.localSessionId) return;
+
+    const payload = JSON.stringify({ session_id: this.localSessionId });
+    this.localSessionId = '';
+    try {
+      navigator.sendBeacon(
+        '/api/local-ui/close',
+        new Blob([payload], { type: 'application/json' }),
+      );
+    } catch {
+      void fetch('/api/local-ui/close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      }).catch(() => undefined);
+    }
   }
 
   async loadAdminOptions(silent = false, keepPickerOpen = false): Promise<void> {
@@ -274,6 +349,7 @@ export class App implements OnInit, OnDestroy {
         const latestClosure = this.orderedClosures()[0];
         this.examinedDate = latestClosure?.date || '';
         this.examinedBranchId = this.activeBranchId;
+        if (latestClosure?.date) this.historyMonthKey = latestClosure.date.slice(0, 7);
       }
       this.isOnline = true;
     } catch (error) {
@@ -501,7 +577,10 @@ export class App implements OnInit, OnDestroy {
           counted_cash: Number(this.countedCash || 0),
         }),
       });
-      this.showCloseMessage(`Caja de ${this.activeBranch()?.name} cerrada y guardada localmente.`, 'success');
+      this.showCloseMessage(
+        `Caja de ${this.activeBranch()?.name} cerrada. El respaldo de GitHub se está enviando en segundo plano.`,
+        'success',
+      );
       await this.loadData(true);
     } catch (error) {
       this.showCloseMessage(this.errorMessage(error), 'error');
@@ -767,6 +846,113 @@ export class App implements OnInit, OnDestroy {
   selectExaminedClosure(closure: Closure): void {
     this.examinedDate = closure.date;
     this.examinedBranchId = closure.branch_id;
+    this.historyMonthKey = closure.date.slice(0, 7);
+  }
+
+  changeHistoryMonth(offset: number): void {
+    const [year, month] = this.historyMonthKey.split('-').map(Number);
+    const changed = new Date(year, month - 1 + offset, 1);
+    this.historyMonthKey = `${changed.getFullYear()}-${String(changed.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  historyMonthLabel(): string {
+    const [year, month] = this.historyMonthKey.split('-').map(Number);
+    const label = new Intl.DateTimeFormat('es-CO', {
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(year, month - 1, 1));
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+
+  historyCalendarDays(): CalendarDay[] {
+    const [year, month] = this.historyMonthKey.split('-').map(Number);
+    const firstDay = new Date(year, month - 1, 1);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const leadingBlanks = (firstDay.getDay() + 6) % 7;
+    const closedDates = new Set(
+      this.orderedClosures()
+        .filter((closure) => closure.date.startsWith(this.historyMonthKey))
+        .map((closure) => closure.date),
+    );
+    const days: CalendarDay[] = [];
+    for (let index = 0; index < leadingBlanks; index++) {
+      days.push({
+        key: `history-blank-${index}`,
+        day: 0,
+        inMonth: false,
+        hasSales: false,
+        isFuture: false,
+      });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      days.push({
+        key,
+        day,
+        inMonth: true,
+        hasSales: closedDates.has(key),
+        isFuture: key > this.todayKey(),
+      });
+    }
+    return days;
+  }
+
+  selectHistoryDate(dateKey: string): void {
+    const closure = this.orderedClosures().find((item) => item.date === dateKey);
+    if (closure) this.selectExaminedClosure(closure);
+  }
+
+  async loadHistoryBackups(): Promise<void> {
+    this.historyBackupLoading = true;
+    this.historyBackupMessage = '';
+    try {
+      const result = await this.api<HistoryBackupResponse>('/api/history-backups');
+      this.localHistoryMonths = result.local_months || [];
+      this.remoteHistoryMonths = result.remote_months || [];
+      if (result.remote_error) {
+        this.historyBackupMessage = result.remote_error;
+        this.historyBackupMessageType = 'error';
+      } else if (result.status?.message) {
+        this.historyBackupMessage = result.status.message;
+        this.historyBackupMessageType = result.status.state === 'error' ? 'error' : 'success';
+      } else {
+        this.historyBackupMessage = 'Respaldos de GitHub consultados.';
+        this.historyBackupMessageType = 'success';
+      }
+    } catch (error) {
+      this.historyBackupMessage = this.errorMessage(error);
+      this.historyBackupMessageType = 'error';
+    } finally {
+      this.historyBackupLoading = false;
+      this.renderNow();
+    }
+  }
+
+  async downloadHistoryMonth(month: string): Promise<void> {
+    this.historyBackupLoading = true;
+    this.historyBackupMessage = `Descargando ${month}...`;
+    this.historyBackupMessageType = '';
+    try {
+      await this.api('/api/history-backups/download', {
+        method: 'POST',
+        body: JSON.stringify({ month }),
+      });
+      this.historyBackupMessage = `Historial de ${month} descargado correctamente.`;
+      this.historyBackupMessageType = 'success';
+      await this.loadData(true);
+      await this.loadHistoryBackups();
+      this.historyMonthKey = month;
+    } catch (error) {
+      this.historyBackupMessage = this.errorMessage(error);
+      this.historyBackupMessageType = 'error';
+    } finally {
+      this.historyBackupLoading = false;
+      this.renderNow();
+    }
+  }
+
+  historyMonthIsLocal(month: string): boolean {
+    return this.localHistoryMonths.includes(month);
   }
 
   closureEvents(closure: Closure): ClosureEvent[] {

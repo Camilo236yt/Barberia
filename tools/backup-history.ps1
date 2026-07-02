@@ -1,0 +1,227 @@
+param(
+  [Parameter(Mandatory = $true)]
+  [ValidateSet("Upload", "List", "Download")]
+  [string]$Action,
+  [string]$Month = "",
+  [string]$Date = "",
+  [string]$AppRoot = ""
+)
+
+$ErrorActionPreference = "Stop"
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+
+if (-not $AppRoot) {
+  $AppRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+} else {
+  $AppRoot = (Resolve-Path $AppRoot).Path
+}
+
+$Branch = "historial-datos"
+$Remote = "origin"
+$RemoteRef = "refs/remotes/$Remote/$Branch"
+$ArchiveDirectory = Join-Path $AppRoot "data\history-archives"
+$StatusPath = Join-Path $AppRoot "data\history-backup-status.json"
+$GitExe = (Get-Command git.exe -ErrorAction SilentlyContinue).Source
+if (-not $GitExe) {
+  $GitExe = (Get-Command git -ErrorAction SilentlyContinue).Source
+}
+if (-not $GitExe) {
+  throw "Git no esta instalado."
+}
+$env:GIT_TERMINAL_PROMPT = "0"
+$env:GCM_INTERACTIVE = "Never"
+if (-not (Test-Path -LiteralPath (Join-Path $AppRoot ".git"))) {
+  throw "La instalacion no conserva la carpeta .git."
+}
+if ($Month -and $Month -notmatch "^\d{4}-\d{2}$") {
+  throw "El mes debe tener el formato AAAA-MM."
+}
+if ($Date -and $Date -notmatch "^\d{4}-\d{2}-\d{2}$") {
+  throw "La fecha debe tener el formato AAAA-MM-DD."
+}
+
+function Invoke-Git($Arguments, [switch]$AllowFailure) {
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $lines = @(& $GitExe -C $AppRoot @Arguments 2>&1)
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  $text = (($lines | ForEach-Object { "$_" }) -join [Environment]::NewLine).Trim()
+  if ($exitCode -ne 0 -and -not $AllowFailure) {
+    throw $(if ($text) { $text } else { "Git termino con el codigo $exitCode." })
+  }
+  return [pscustomobject]@{ ExitCode = $exitCode; Text = $text; Lines = $lines }
+}
+
+function Set-BackupStatus($State, $Message) {
+  $parent = Split-Path -Parent $StatusPath
+  New-Item -ItemType Directory -Path $parent -Force | Out-Null
+  [pscustomobject]@{
+    state = $State
+    month = $(if ($Month) { $Month } else { $Date.Substring(0, 7) })
+    date = $Date
+    message = $Message
+    at = (Get-Date).ToString("o")
+  } | ConvertTo-Json | Set-Content -LiteralPath $StatusPath -Encoding UTF8
+}
+
+function Enable-PartialHistoryFetch {
+  Invoke-Git @("config", "remote.$Remote.promisor", "true") | Out-Null
+  Invoke-Git @("config", "remote.$Remote.partialclonefilter", "blob:none") | Out-Null
+}
+
+function Fetch-HistoryBranch {
+  Enable-PartialHistoryFetch
+  $result = Invoke-Git @(
+    "fetch", "--quiet", "--filter=blob:none", "--no-tags", $Remote,
+    "+refs/heads/$Branch`:$RemoteRef"
+  ) -AllowFailure
+  if ($result.ExitCode -eq 0) {
+    return $true
+  }
+  if ($result.Text -match "couldn't find remote ref|no se pudo encontrar la referencia remota") {
+    return $false
+  }
+  throw $result.Text
+}
+
+function Export-GitBlob($ObjectSpec, $Destination) {
+  $process = New-Object System.Diagnostics.Process
+  $fileStream = $null
+  try {
+    $process.StartInfo.FileName = $GitExe
+    $process.StartInfo.WorkingDirectory = $AppRoot
+    $process.StartInfo.Arguments = "show `"$ObjectSpec`""
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.CreateNoWindow = $true
+    $process.StartInfo.RedirectStandardOutput = $true
+    $process.StartInfo.RedirectStandardError = $true
+    if (-not $process.Start()) {
+      throw "No se pudo iniciar Git para descargar el mes."
+    }
+    $fileStream = [System.IO.File]::Open(
+      $Destination,
+      [System.IO.FileMode]::Create,
+      [System.IO.FileAccess]::Write,
+      [System.IO.FileShare]::None
+    )
+    $process.StandardOutput.BaseStream.CopyTo($fileStream)
+    $fileStream.Close()
+    $fileStream = $null
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) {
+      throw $process.StandardError.ReadToEnd().Trim()
+    }
+  } finally {
+    if ($fileStream) { $fileStream.Dispose() }
+    $process.Dispose()
+  }
+}
+
+try {
+  if ($Action -eq "List") {
+    if (-not (Fetch-HistoryBranch)) {
+      [pscustomobject]@{ months = @() } | ConvertTo-Json -Compress
+      exit 0
+    }
+    $tree = Invoke-Git @("ls-tree", "-r", "--name-only", $RemoteRef, "meses")
+    $months = @(
+      $tree.Lines |
+        ForEach-Object {
+          if ("$_" -match "^meses/(\d{4}-\d{2})/\d{4}-\d{2}-\d{2}\.zip$") { $Matches[1] }
+        } |
+        Where-Object { $_ } |
+        Sort-Object -Descending -Unique
+    )
+    [pscustomobject]@{ months = $months } | ConvertTo-Json -Compress
+    exit 0
+  }
+
+  New-Item -ItemType Directory -Path $ArchiveDirectory -Force | Out-Null
+
+  if ($Action -eq "Download") {
+    if (-not $Month) {
+      throw "Debes indicar el mes."
+    }
+    if (-not (Fetch-HistoryBranch)) {
+      throw "Todavia no hay respaldos remotos."
+    }
+    $tree = Invoke-Git @("ls-tree", "-r", "--name-only", $RemoteRef, "meses/$Month")
+    $remoteFiles = @(
+      $tree.Lines | Where-Object { "$_" -match "^meses/$Month/\d{4}-\d{2}-\d{2}\.zip$" }
+    )
+    if (-not $remoteFiles.Count) {
+      throw "No existe un respaldo remoto para $Month."
+    }
+    foreach ($remoteFile in $remoteFiles) {
+      $filename = Split-Path -Leaf $remoteFile
+      $archivePath = Join-Path $ArchiveDirectory $filename
+      $temporaryPath = Join-Path $ArchiveDirectory "$filename.download"
+      Export-GitBlob "$RemoteRef`:$remoteFile" $temporaryPath
+      Move-Item -LiteralPath $temporaryPath -Destination $archivePath -Force
+    }
+    [pscustomobject]@{ ok = $true; month = $Month; files = $remoteFiles.Count } |
+      ConvertTo-Json -Compress
+    exit 0
+  }
+
+  if (-not $Date) {
+    throw "Debes indicar la fecha que se va a respaldar."
+  }
+  $Month = $Date.Substring(0, 7)
+  $archivePath = Join-Path $ArchiveDirectory "$Date.zip"
+  if (-not (Test-Path -LiteralPath $archivePath)) {
+    throw "No existe el archivo local del dia $Date."
+  }
+
+  Set-BackupStatus "uploading" "Subiendo el historial a GitHub."
+  $hasRemoteBranch = Fetch-HistoryBranch
+  $temporaryIndex = Join-Path $env:TEMP ("capitan-gold-index-" + [guid]::NewGuid().ToString("N"))
+  $previousIndex = $env:GIT_INDEX_FILE
+  try {
+    $env:GIT_INDEX_FILE = $temporaryIndex
+    if ($hasRemoteBranch) {
+      Invoke-Git @("read-tree", $RemoteRef) | Out-Null
+    } else {
+      Invoke-Git @("read-tree", "--empty") | Out-Null
+    }
+    $blobResult = Invoke-Git @("hash-object", "-w", $archivePath)
+    $blob = @($blobResult.Lines | Where-Object { "$_" -match "^[0-9a-f]{40,64}$" })[-1]
+    if (-not $blob) {
+      throw "Git no devolvio el identificador del archivo de respaldo."
+    }
+    Invoke-Git @(
+      "update-index", "--add", "--cacheinfo",
+      "100644,$blob,meses/$Month/$Date.zip"
+    ) | Out-Null
+    $tree = (Invoke-Git @("write-tree")).Text
+
+    $env:GIT_AUTHOR_NAME = "Capitan Gold"
+    $env:GIT_AUTHOR_EMAIL = "respaldos@capitangold.local"
+    $env:GIT_COMMITTER_NAME = "Capitan Gold"
+    $env:GIT_COMMITTER_EMAIL = "respaldos@capitangold.local"
+    $commitArguments = @("commit-tree", $tree, "-m", "Respaldo automatico $Date")
+    if ($hasRemoteBranch) {
+      $parent = (Invoke-Git @("rev-parse", $RemoteRef)).Text
+      $commitArguments += @("-p", $parent)
+    }
+    $commit = (Invoke-Git $commitArguments).Text
+    Invoke-Git @("push", "--quiet", $Remote, "$commit`:refs/heads/$Branch") | Out-Null
+  } finally {
+    $env:GIT_INDEX_FILE = $previousIndex
+    Remove-Item -LiteralPath $temporaryIndex -Force -ErrorAction SilentlyContinue
+  }
+
+  Set-BackupStatus "success" "Historial $Date respaldado en GitHub."
+  [pscustomobject]@{ ok = $true; month = $Month; date = $Date } | ConvertTo-Json -Compress
+  exit 0
+} catch {
+  if ($Action -eq "Upload") {
+    Set-BackupStatus "error" $_.Exception.Message
+  }
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}

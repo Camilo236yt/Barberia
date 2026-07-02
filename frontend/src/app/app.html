@@ -455,6 +455,71 @@
           <span class="status-pill online">{{ adminRole === 'online' ? 'Online' : 'Servidor' }}</span>
         </div>
 
+        <section class="tool-panel accounting-calendar-panel history-calendar-panel">
+          <div class="calendar-header">
+            <div>
+              <p class="calendar-eyebrow">Buscar cierres por fecha</p>
+              <h2>{{ historyMonthLabel() }}</h2>
+            </div>
+            <div class="calendar-navigation">
+              <button type="button" aria-label="Mes anterior" (click)="changeHistoryMonth(-1)">←</button>
+              <button type="button" (click)="historyMonthKey = todayKey().slice(0, 7)">Hoy</button>
+              <button type="button" aria-label="Mes siguiente" (click)="changeHistoryMonth(1)">→</button>
+            </div>
+          </div>
+          <div class="calendar-legend">
+            <span><i class="legend-dot billed"></i> Con cierre guardado</span>
+            <span><i class="legend-dot empty"></i> Sin cierre</span>
+            <span><i class="legend-dot future"></i> Día futuro</span>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+          </div>
+          <div class="accounting-calendar">
+            <button
+              *ngFor="let day of historyCalendarDays(); trackBy: trackByKey"
+              type="button"
+              [disabled]="!day.inMonth || day.isFuture || !day.hasSales"
+              [class.blank]="!day.inMonth"
+              [class.billed]="day.inMonth && day.hasSales"
+              [class.empty]="day.inMonth && !day.hasSales && !day.isFuture"
+              [class.future]="day.isFuture"
+              [class.selected]="day.key === examinedDate"
+              (click)="day.hasSales && selectHistoryDate(day.key)"
+            >
+              <span *ngIf="day.inMonth">{{ day.day }}</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="tool-panel history-backup-panel">
+          <div class="panel-heading">
+            <div>
+              <p>Copia de seguridad selectiva</p>
+              <h2>Historial guardado en GitHub</h2>
+            </div>
+            <button class="secondary-button" type="button" [disabled]="historyBackupLoading" (click)="loadHistoryBackups()">
+              {{ historyBackupLoading ? 'Consultando...' : 'Buscar respaldos' }}
+            </button>
+          </div>
+          <p class="backup-explanation">Los meses anteriores no ocupan espacio en una instalación nueva. Descarga únicamente el mes que necesites consultar.</p>
+          <div class="history-month-buttons" *ngIf="remoteHistoryMonths.length">
+            <button
+              type="button"
+              *ngFor="let month of remoteHistoryMonths"
+              [class.downloaded]="historyMonthIsLocal(month)"
+              [disabled]="historyBackupLoading || historyMonthIsLocal(month)"
+              (click)="downloadHistoryMonth(month)"
+            >
+              <strong>{{ month }}</strong>
+              <span>{{ historyMonthIsLocal(month) ? 'Disponible' : 'Descargar' }}</span>
+            </button>
+          </div>
+          <p class="form-message" [class.success]="historyBackupMessageType === 'success'" [class.error]="historyBackupMessageType === 'error'">
+            {{ historyBackupMessage }}
+          </p>
+        </section>
+
         <div class="history-layout">
           <section class="tool-panel history-list-panel">
             <div class="panel-heading">

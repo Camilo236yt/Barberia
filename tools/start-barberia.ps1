@@ -72,29 +72,7 @@ function Enable-PortableNode {
 
 function Build-Frontend {
   Enable-PortableNode
-  $npm = Find-Npm
-  if (-not $npm) {
-    throw "No se encontro Node/npm. Instala Node.js o restaura tools\node."
-  }
-
   $frontend = Join-Path $AppRoot "frontend"
-  $nodeModules = Join-Path $frontend "node_modules"
-  $dependencyStamp = Join-Path $nodeModules ".package-lock.json"
-  $packageLock = Join-Path $frontend "package-lock.json"
-  $needsDependencies = -not (Test-Path $nodeModules)
-  if (-not $needsDependencies -and (Test-Path $packageLock)) {
-    $needsDependencies = -not (Test-Path $dependencyStamp) -or
-      (Get-Item $packageLock).LastWriteTimeUtc -gt (Get-Item $dependencyStamp).LastWriteTimeUtc
-  }
-
-  if ($needsDependencies) {
-    Write-Step "Instalando dependencias del panel..."
-    & $npm install --prefix $frontend
-    if ($LASTEXITCODE -ne 0) {
-      throw "No se pudieron instalar las dependencias de Angular."
-    }
-  }
-
   $index = Join-Path $frontend "dist\frontend\browser\index.html"
   $needsBuild = -not (Test-Path $index)
   if (-not $needsBuild) {
@@ -106,11 +84,55 @@ function Build-Frontend {
   }
 
   if ($needsBuild) {
+    $npm = Find-Npm
+    if (-not $npm) {
+      if (Test-Path $index) {
+        Write-Step "Usando el panel precompilado optimizado."
+        return
+      }
+      throw "Falta el panel compilado y no se encontro Node/npm para crearlo."
+    }
+
+    $nodeModules = Join-Path $frontend "node_modules"
+    $dependencyStamp = Join-Path $nodeModules ".package-lock.json"
+    $packageLock = Join-Path $frontend "package-lock.json"
+    $needsDependencies = -not (Test-Path $nodeModules)
+    if (-not $needsDependencies -and (Test-Path $packageLock)) {
+      $needsDependencies = -not (Test-Path $dependencyStamp) -or
+        (Get-Item $packageLock).LastWriteTimeUtc -gt (Get-Item $dependencyStamp).LastWriteTimeUtc
+    }
+    if ($needsDependencies) {
+      Write-Step "Instalando dependencias del panel..."
+      & $npm install --prefix $frontend
+      if ($LASTEXITCODE -ne 0) {
+        throw "No se pudieron instalar las dependencias de Angular."
+      }
+    }
+
     Write-Step "Compilando el panel administrativo..."
     & $npm run build --prefix $frontend
     if ($LASTEXITCODE -ne 0) {
       throw "Angular no pudo compilar el panel."
     }
+  }
+}
+
+function Install-NgrokIfMissing {
+  if (Test-Path -LiteralPath $NgrokExe) {
+    return
+  }
+  $ngrokDirectory = Split-Path -Parent $NgrokExe
+  $downloadPath = Join-Path $env:TEMP "ngrok-capitan-gold.zip"
+  New-Item -ItemType Directory -Path $ngrokDirectory -Force | Out-Null
+  Write-Step "Descargando el componente para el acceso online..."
+  Invoke-WebRequest `
+    -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" `
+    -OutFile $downloadPath `
+    -UseBasicParsing
+  Expand-Archive -LiteralPath $downloadPath -DestinationPath $ngrokDirectory -Force
+  Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
+  if (-not (Test-Path -LiteralPath $NgrokExe)) {
+    throw "No se pudo instalar ngrok."
   }
 }
 
@@ -208,9 +230,7 @@ try {
   $tunnelProcess = $null
   try {
     if ($Internet) {
-      if (-not (Test-Path $NgrokExe)) {
-        throw "No se encontro tools\ngrok\ngrok.exe."
-      }
+      Install-NgrokIfMissing
       if (-not (Test-Path $NgrokTokenPath) -or -not (Test-Path $NgrokPublicUrlPath)) {
         throw "Falta la configuracion de ngrok en tools\ngrok."
       }
@@ -256,13 +276,15 @@ try {
     if (-not $NoBrowser) {
       Start-Process $LocalAdminUrl
     }
-    Write-Step "Cierra esta ventana o usa Ctrl+C para apagar el sistema."
-    if ($tunnelProcess) {
-      Wait-Process -Id $tunnelProcess.Id
-    } elseif ($serverProcess) {
-      Wait-Process -Id $serverProcess.Id
-    } elseif (-not $NoPause) {
-      Read-Host "Presiona Enter para cerrar esta ventana"
+    Write-Step "Al cerrar la pestaña local se apagara tambien esta ventana."
+    while (Get-PortListener) {
+      if ($serverProcess -and $serverProcess.HasExited) {
+        break
+      }
+      if ($tunnelProcess -and $tunnelProcess.HasExited) {
+        throw "El enlace online se cerro inesperadamente."
+      }
+      Start-Sleep -Milliseconds 600
     }
   } finally {
     if ($tunnelProcess -and -not $tunnelProcess.HasExited) {

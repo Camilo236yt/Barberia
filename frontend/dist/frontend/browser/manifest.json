@@ -1,0 +1,16 @@
+{
+  "name": "Capitan Gold Barber Shop",
+  "short_name": "Capitan Gold",
+  "start_url": "/admin",
+  "display": "standalone",
+  "background_color": "#100d0a",
+  "theme_color": "#100d0a",
+  "icons": [
+    {
+      "src": "/capitan-gold-logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

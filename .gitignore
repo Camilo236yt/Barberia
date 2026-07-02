@@ -9,8 +9,15 @@ tools/cloudflare-worker/public-url.txt
 # Archivos generados
 __pycache__/
 *.pyc
-frontend/dist/
 frontend/node_modules/
+frontend/.angular/
+tools/node/
+tools/cloudflared/
+tools/cloudflare-worker/node_modules/
+
+# El panel compilado se publica: evita instalar Node en el computador cliente
+!frontend/dist/
+!frontend/dist/**
 
 # Respaldos y temporales locales
 tools/backups/

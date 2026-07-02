@@ -5,10 +5,14 @@ import base64
 import datetime as dt
 import json
 import mimetypes
+import os
 import re
+import subprocess
 import socket
 import threading
+import time
 import uuid
+import zipfile
 import ipaddress
 import hmac
 import secrets
@@ -19,6 +23,9 @@ ANGULAR_PUBLIC_DIR = ROOT / "frontend" / "dist" / "frontend" / "browser"
 DATA_DIR = ROOT / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 DB_PATH = DATA_DIR / "db.json"
+HISTORY_ARCHIVE_DIR = DATA_DIR / "history-archives"
+HISTORY_BACKUP_STATUS_PATH = DATA_DIR / "history-backup-status.json"
+HISTORY_BACKUP_SCRIPT = ROOT / "tools" / "backup-history.ps1"
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
 LOCK = threading.Lock()
@@ -26,6 +33,12 @@ EVENT_CONDITION = threading.Condition()
 DATA_VERSION = 0
 ADMIN_ASSIGNMENTS = {"local": None, "online": None}
 ADMIN_ASSIGNMENT_LOCK = threading.Lock()
+LOCAL_UI_SESSIONS = {}
+LOCAL_UI_SESSION_LOCK = threading.Lock()
+LOCAL_UI_MONITOR_ARMED = False
+LOCAL_UI_CLOSE_GRACE_SECONDS = 6
+LOCAL_UI_HEARTBEAT_TIMEOUT_SECONDS = 90
+HISTORY_BACKUP_LOCK = threading.Lock()
 
 DEFAULT_DB = {
     "branches": [
@@ -113,6 +126,7 @@ def closure_event_from_snapshot(snapshot):
 def ensure_storage():
     DATA_DIR.mkdir(exist_ok=True)
     UPLOAD_DIR.mkdir(exist_ok=True)
+    HISTORY_ARCHIVE_DIR.mkdir(exist_ok=True)
     token_path = DATA_DIR / "admin-online-token.txt"
     if not token_path.exists():
         token_path.write_text(secrets.token_urlsafe(32), encoding="utf-8")
@@ -351,6 +365,242 @@ def active_public_dir():
     return ANGULAR_PUBLIC_DIR
 
 
+def history_day_payload(db, date_key):
+    return {
+        "version": 1,
+        "month": date_key[:7],
+        "date": date_key,
+        "generated_at": now_iso(),
+        "branches": db["branches"],
+        "barbers": db["barbers"],
+        "services": db["services"],
+        "settings": db["settings"],
+        "sales": [
+            sale for sale in db["sales"] if item_day(sale) == date_key
+        ],
+        "closures": [
+            closure for closure in db["closures"] if closure.get("date") == date_key
+        ],
+    }
+
+
+def write_history_archive(db, date_key):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_key):
+        raise ValueError("Fecha de historial no valida.")
+    HISTORY_ARCHIVE_DIR.mkdir(exist_ok=True)
+    payload = history_day_payload(db, date_key)
+    target = HISTORY_ARCHIVE_DIR / f"{date_key}.zip"
+    temp_target = HISTORY_ARCHIVE_DIR / f"{date_key}.tmp"
+    with zipfile.ZipFile(
+        temp_target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
+    ) as archive:
+        archive.writestr(
+            "history.json",
+            json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+        )
+        included = set()
+        for sale in payload["sales"]:
+            proof_url = str(sale.get("proof_url") or "")
+            if not proof_url.startswith("/uploads/"):
+                continue
+            filename = Path(proof_url).name
+            source = UPLOAD_DIR / filename
+            if source.is_file() and filename not in included:
+                archive.write(source, f"uploads/{filename}")
+                included.add(filename)
+    temp_target.replace(target)
+    return target
+
+
+def read_history_archive(path):
+    try:
+        with zipfile.ZipFile(path, "r") as archive:
+            return json.loads(archive.read("history.json").decode("utf-8"))
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile, json.JSONDecodeError):
+        return None
+
+
+def restore_history_proofs(month_key):
+    UPLOAD_DIR.mkdir(exist_ok=True)
+    for archive_path in HISTORY_ARCHIVE_DIR.glob(f"{month_key}-??.zip"):
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            for member in archive.infolist():
+                member_path = Path(member.filename)
+                if (
+                    member.is_dir()
+                    or len(member_path.parts) != 2
+                    or member_path.parts[0] != "uploads"
+                ):
+                    continue
+                filename = member_path.name
+                target = UPLOAD_DIR / filename
+                if not target.exists():
+                    target.write_bytes(archive.read(member))
+
+
+def combined_history(db):
+    sales = list(db["sales"])
+    closures = list(db["closures"])
+    sale_ids = {sale.get("id") for sale in sales}
+    closure_ids = {closure.get("id") for closure in closures}
+    for archive_path in sorted(HISTORY_ARCHIVE_DIR.glob("*.zip")):
+        archived = read_history_archive(archive_path)
+        if not archived:
+            continue
+        for sale in archived.get("sales", []):
+            if sale.get("id") not in sale_ids:
+                sales.append(sale)
+                sale_ids.add(sale.get("id"))
+        for closure in archived.get("closures", []):
+            if closure.get("id") not in closure_ids:
+                closures.append(closure)
+                closure_ids.add(closure.get("id"))
+    return sales, closures
+
+
+def prepare_existing_history_archives(db):
+    created_dates = []
+    closure_dates = sorted(
+        {
+            str(closure.get("date") or "")
+            for closure in db["closures"]
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(closure.get("date") or ""))
+        }
+    )
+    for date_key in closure_dates:
+        if not (HISTORY_ARCHIVE_DIR / f"{date_key}.zip").exists():
+            write_history_archive(db, date_key)
+            created_dates.append(date_key)
+    return created_dates
+
+
+def run_history_backup(action, history_key="", timeout=120):
+    if action not in {"Upload", "List", "Download"}:
+        raise ValueError("Accion de respaldo no valida.")
+    if action == "Upload" and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", history_key):
+        raise ValueError("Fecha de historial no valida.")
+    if action == "Download" and not re.fullmatch(r"\d{4}-\d{2}", history_key):
+        raise ValueError("Mes de historial no valido.")
+    if not HISTORY_BACKUP_SCRIPT.exists():
+        raise RuntimeError("No se encontro el modulo de respaldo de historial.")
+    powershell = (
+        Path(os.environ.get("SystemRoot", r"C:\Windows"))
+        / "System32"
+        / "WindowsPowerShell"
+        / "v1.0"
+        / "powershell.exe"
+    )
+    command = [
+        str(powershell),
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(HISTORY_BACKUP_SCRIPT),
+        "-Action",
+        action,
+        "-AppRoot",
+        str(ROOT),
+    ]
+    if action == "Upload":
+        command.extend(["-Date", history_key])
+    elif action == "Download":
+        command.extend(["-Month", history_key])
+    creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    with HISTORY_BACKUP_LOCK:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            creationflags=creation_flags,
+            check=False,
+        )
+    output = completed.stdout.strip()
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or output or "Git no pudo completar el respaldo."
+        raise RuntimeError(detail)
+    if not output:
+        return {}
+    try:
+        return json.loads(output.splitlines()[-1])
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Respuesta de respaldo no valida: {output}") from exc
+
+
+def queue_history_backup(date_key):
+    def upload():
+        try:
+            run_history_backup("Upload", date_key)
+        except Exception as exc:
+            print(f"No se pudo subir el historial {date_key}: {exc}")
+
+    threading.Thread(target=upload, daemon=True).start()
+
+
+def history_backup_summary():
+    local_months = sorted(
+        {path.stem[:7] for path in HISTORY_ARCHIVE_DIR.glob("????-??-??.zip")}, reverse=True
+    )
+    remote_months = []
+    remote_error = ""
+    try:
+        remote_months = run_history_backup("List").get("months", [])
+    except Exception as exc:
+        remote_error = str(exc)
+    status = {}
+    if HISTORY_BACKUP_STATUS_PATH.exists():
+        try:
+            status = json.loads(HISTORY_BACKUP_STATUS_PATH.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            status = {}
+    return {
+        "local_months": local_months,
+        "remote_months": remote_months,
+        "status": status,
+        "remote_error": remote_error,
+    }
+
+
+def update_local_ui_session(session_id, closing=False):
+    global LOCAL_UI_MONITOR_ARMED
+    now = time.monotonic()
+    with LOCAL_UI_SESSION_LOCK:
+        LOCAL_UI_MONITOR_ARMED = True
+        LOCAL_UI_SESSIONS[session_id] = {
+            "last_seen": now,
+            "close_after": now + LOCAL_UI_CLOSE_GRACE_SECONDS if closing else None,
+        }
+
+
+def monitor_local_ui(server):
+    while True:
+        time.sleep(0.5)
+        now = time.monotonic()
+        with LOCAL_UI_SESSION_LOCK:
+            if not LOCAL_UI_MONITOR_ARMED:
+                continue
+            expired = [
+                session_id
+                for session_id, session in LOCAL_UI_SESSIONS.items()
+                if (
+                    session.get("close_after") is not None
+                    and now >= session["close_after"]
+                )
+                or now - session.get("last_seen", now) >= LOCAL_UI_HEARTBEAT_TIMEOUT_SECONDS
+            ]
+            for session_id in expired:
+                LOCAL_UI_SESSIONS.pop(session_id, None)
+            should_stop = not LOCAL_UI_SESSIONS
+        if should_stop:
+            print("La pestaña local se cerro. Apagando Barberia Control.")
+            server.shutdown()
+            return
+
+
 class BarberiaHandler(BaseHTTPRequestHandler):
     server_version = "BarberiaDemo/1.0"
     protocol_version = "HTTP/1.1"
@@ -383,6 +633,22 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             return ip.is_private or ip.is_loopback
         except ValueError:
             return False
+
+    def is_local_ui_request(self):
+        host = (self.headers.get("Host") or "").split(":")[0].strip("[]").lower()
+        return host in {"localhost", "127.0.0.1", "::1"}
+
+    def local_ui_session(self, closing=False):
+        if not self.is_local_ui_request():
+            self.send_json({"error": "Esta accion solo esta disponible en la computadora principal."}, 403)
+            return
+        payload = self.read_json_body()
+        session_id = str(payload.get("session_id") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9-]{8,80}", session_id):
+            self.send_json({"error": "Sesion local no valida."}, 400)
+            return
+        update_local_ui_session(session_id, closing=closing)
+        self.send_json({"ok": True})
 
     def send_redirect(self, location):
         self.send_response(302)
@@ -479,6 +745,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 return
             with LOCK:
                 db = read_db()
+                history_sales, history_closures = combined_history(db)
                 branch = find_by_id(db["branches"], branch_id)
                 if not branch:
                     self.send_json({"error": "Barberia no encontrada."}, 404)
@@ -492,13 +759,24 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                         "services": [
                             service for service in db["services"] if service.get("branch_id") == branch_id
                         ],
-                        "sales": [sale for sale in db["sales"] if sale.get("branch_id") == branch_id],
+                        "sales": [
+                            sale for sale in history_sales if sale.get("branch_id") == branch_id
+                        ],
                         "closures": [
-                            closure for closure in db["closures"] if closure.get("branch_id") == branch_id
+                            closure
+                            for closure in history_closures
+                            if closure.get("branch_id") == branch_id
                         ],
                         "settings": db["settings"],
                     }
                 )
+            return
+
+        if path == "/api/history-backups":
+            role = self.require_admin_role()
+            if not role or not self.branch_scope(role):
+                return
+            self.send_json(history_backup_summary())
             return
 
         if path == "/api/events":
@@ -528,6 +806,12 @@ class BarberiaHandler(BaseHTTPRequestHandler):
         path = parsed.path
 
         try:
+            if path == "/api/local-ui/heartbeat":
+                self.local_ui_session()
+                return
+            if path == "/api/local-ui/close":
+                self.local_ui_session(closing=True)
+                return
             if path == "/api/admin/select-branch":
                 role = self.require_admin_role()
                 if role:
@@ -601,6 +885,17 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 if not self.branch_scope(role):
                     return
                 self.reopen_day()
+                return
+            if path == "/api/history-backups/download":
+                role = self.require_admin_role()
+                if not role or not self.branch_scope(role):
+                    return
+                payload = self.read_json_body()
+                month_key = str(payload.get("month") or "").strip()
+                result = run_history_backup("Download", month_key)
+                restore_history_proofs(month_key)
+                publish_data_change()
+                self.send_json(result)
                 return
         except json.JSONDecodeError:
             self.send_json({"error": "JSON invalido."}, 400)
@@ -940,8 +1235,10 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 }
                 db["closures"].insert(0, closure)
             write_db(db)
+            write_history_archive(db, date_key)
             publish_data_change()
             self.send_json({"closure": closure})
+        queue_history_backup(date_key)
 
     def reopen_day(self):
         payload = self.read_json_body()
@@ -962,19 +1259,31 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             closure["reopened_at"] = now_iso()
             closure["events"] = events + [{"type": "reopened", "at": closure["reopened_at"]}]
             write_db(db)
+            write_history_archive(db, date_key)
             publish_data_change()
             self.send_json({"closure": closure})
+        queue_history_backup(date_key)
 
 
 def main():
     ensure_storage()
+    with LOCK:
+        existing_db = read_db()
+        pending_history_dates = prepare_existing_history_archives(existing_db)
+    for history_date in pending_history_dates:
+        queue_history_backup(history_date)
     port = 8000
     server = ThreadingHTTPServer(("127.0.0.1", port), BarberiaHandler)
+    monitor_thread = threading.Thread(target=monitor_local_ui, args=(server,), daemon=True)
+    monitor_thread.start()
     print("Barberia Control corriendo.")
     print(f"Administrador local: http://localhost:{port}/admin")
     print("El enlace online se crea con Iniciar Barberia Internet.cmd")
     print("Usa Ctrl+C para detener el servidor.")
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":
