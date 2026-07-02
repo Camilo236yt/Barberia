@@ -1,6 +1,8 @@
 # Datos y credenciales propios de cada instalacion
 data/
 LINK_ADMIN_ONLINE.txt
+ngrok-authtoken.local.txt
+ngrok-authtoken.txt
 tools/logs/
 tools/ngrok/authtoken.txt
 tools/ngrok/public-url.txt

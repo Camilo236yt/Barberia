@@ -2,6 +2,7 @@ param(
   [string]$AppRoot = "",
   [string]$Remote = "origin",
   [string]$Branch = "main",
+  [string]$RepositoryUrl = "https://github.com/Camilo236yt/Barberia.git",
   [int]$FetchTimeoutSeconds = 25,
   [switch]$CheckOnly,
   [switch]$AcceptUpdate,
@@ -33,7 +34,18 @@ $LocalDependencyPaths = @(
   "tools/ngrok/ngrok.exe"
 )
 
+$RequiredProgramPaths = @(
+  "server.py",
+  "Iniciar Barberia.cmd",
+  "Iniciar Barberia Internet.cmd",
+  "tools\start-barberia.ps1",
+  "tools\update-barberia.ps1",
+  "frontend\dist\frontend\browser\index.html"
+)
+
 $UpdateStateRoot = Join-Path $env:LOCALAPPDATA "CapitanGold\updates"
+$PortableGitRoot = Join-Path $env:LOCALAPPDATA "CapitanGold\Git"
+$PortableGitExe = Join-Path $PortableGitRoot "cmd\git.exe"
 $appRootBytes = [System.Text.Encoding]::UTF8.GetBytes($AppRoot.ToLowerInvariant())
 $appRootHash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($appRootBytes)
 $appId = ([System.BitConverter]::ToString($appRootHash)).Replace("-", "").Substring(0, 16)
@@ -45,6 +57,86 @@ function Write-Update($Message, $Color = "") {
     Write-Host "[Actualizacion] $Message" -ForegroundColor $Color
   } else {
     Write-Host "[Actualizacion] $Message"
+  }
+}
+
+function Test-Executable($FilePath, $Arguments) {
+  if (-not $FilePath -or -not (Test-Path -LiteralPath $FilePath)) {
+    return $false
+  }
+  try {
+    & $FilePath @Arguments | Out-Null
+    return $LASTEXITCODE -eq 0
+  } catch {
+    return $false
+  }
+}
+
+function Download-File($Uri, $Destination) {
+  $parent = Split-Path -Parent $Destination
+  New-Item -ItemType Directory -Path $parent -Force | Out-Null
+  Invoke-WebRequest -Uri $Uri -OutFile $Destination -UseBasicParsing
+  if (-not (Test-Path -LiteralPath $Destination) -or (Get-Item -LiteralPath $Destination).Length -eq 0) {
+    throw "La descarga termino vacia: $Uri"
+  }
+}
+
+function Install-PortableGit {
+  if (Test-Executable $PortableGitExe @("--version")) {
+    return $PortableGitExe
+  }
+
+  Write-Update "Git no esta disponible. Recuperando Git portatil para actualizaciones..." "Yellow"
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  $release = Invoke-RestMethod `
+    -Uri "https://api.github.com/repos/git-for-windows/git/releases/latest" `
+    -Headers @{ "User-Agent" = "Capitan-Gold-Updater" } `
+    -UseBasicParsing
+  $asset = $release.assets |
+    Where-Object {
+      $_.name -match "^MinGit-.*-64-bit\.zip$" -and
+      $_.name -notmatch "busybox"
+    } |
+    Select-Object -First 1
+  if (-not $asset) {
+    throw "No se encontro el paquete oficial de Git portatil de 64 bits."
+  }
+
+  $zipPath = Join-Path $env:TEMP ("capitan-gold-mingit-" + [guid]::NewGuid().ToString("N") + ".zip")
+  try {
+    Download-File $asset.browser_download_url $zipPath
+    New-Item -ItemType Directory -Path $PortableGitRoot -Force | Out-Null
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $PortableGitRoot -Force
+  } finally {
+    Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+  }
+
+  if (-not (Test-Executable $PortableGitExe @("--version"))) {
+    throw "Git portatil se descargo, pero no pudo iniciarse."
+  }
+  Write-Update "Git portatil quedo listo."
+  return $PortableGitExe
+}
+
+function Get-Git {
+  foreach ($candidate in @(
+    $PortableGitExe,
+    (Get-Command git.exe -ErrorAction SilentlyContinue).Source,
+    (Get-Command git -ErrorAction SilentlyContinue).Source,
+    (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd\git.exe"),
+    (Join-Path $env:ProgramFiles "Git\cmd\git.exe")
+  )) {
+    if (Test-Executable $candidate @("--version")) {
+      return $candidate
+    }
+  }
+
+  try {
+    return Install-PortableGit
+  } catch {
+    Write-Update "No se pudo recuperar Git automaticamente. El programa iniciara sin actualizar." "Yellow"
+    Write-Host "  $($_.Exception.Message)"
+    return ""
   }
 }
 
@@ -318,32 +410,64 @@ function Remove-CreatedStash($StashHash) {
   }
 }
 
+function Test-RequiredProgramFiles {
+  foreach ($requiredPath in $RequiredProgramPaths) {
+    if (-not (Test-Path -LiteralPath (Join-Path $AppRoot $requiredPath))) {
+      return $false
+    }
+  }
+  return $true
+}
+
+function Ensure-GitMetadata {
+  $metadataFetched = $false
+
+  $repositoryCheck = Invoke-Git @("rev-parse", "--is-inside-work-tree") -AllowFailure
+  if ($repositoryCheck.ExitCode -ne 0 -or $repositoryCheck.Text -ne "true") {
+    Write-Update "Falta la informacion de Git. Reconectando esta copia con GitHub..." "Yellow"
+    Invoke-Git @("init", "--quiet") | Out-Null
+  }
+
+  $remoteUrl = Invoke-Git @("remote", "get-url", $Remote) -AllowFailure
+  if ($remoteUrl.ExitCode -ne 0) {
+    Invoke-Git @("remote", "add", $Remote, $RepositoryUrl) | Out-Null
+  } elseif ($remoteUrl.Text -ne $RepositoryUrl) {
+    Write-Update "Corrigiendo la direccion del repositorio GitHub..."
+    Invoke-Git @("remote", "set-url", $Remote, $RepositoryUrl) | Out-Null
+  }
+
+  $remoteRef = "$Remote/$Branch"
+  $remoteRevision = Invoke-Git @("rev-parse", "--verify", $remoteRef) -AllowFailure
+  if ($remoteRevision.ExitCode -ne 0) {
+    Write-Update "Descargando la informacion necesaria para recuperar las actualizaciones..."
+    Invoke-Git @("fetch", "--prune", $Remote, $Branch) | Out-Null
+    $metadataFetched = $true
+  }
+
+  $localRevision = Invoke-Git @("rev-parse", "--verify", "HEAD") -AllowFailure
+  if ($localRevision.ExitCode -ne 0) {
+    Invoke-Git @("symbolic-ref", "HEAD", "refs/heads/$Branch") | Out-Null
+    Invoke-Git @("reset", "--mixed", $remoteRef) | Out-Null
+    Write-Update "La conexion con GitHub fue recuperada correctamente." "Green"
+  }
+
+  Invoke-Git @("branch", "--set-upstream-to=$remoteRef", $Branch) -AllowFailure | Out-Null
+  return $metadataFetched
+}
+
 try {
   Set-Location $AppRoot
   New-Item -ItemType Directory -Path $UpdateStateRoot -Force | Out-Null
   Recover-PendingUpdate
 
-  if (-not (Test-Path -LiteralPath (Join-Path $AppRoot ".git"))) {
-    Write-Update "Esta copia no contiene la informacion de Git; se omite la comprobacion." "Yellow"
+  $gitPath = Get-Git
+  if (-not $gitPath) {
     exit 0
   }
+  $script:GitExe = $gitPath
 
-  $portableGit = Join-Path $env:LOCALAPPDATA "CapitanGold\Git\cmd\git.exe"
-  $gitCommand = if (Test-Path -LiteralPath $portableGit) {
-    [pscustomobject]@{ Source = $portableGit }
-  } else {
-    Get-Command git.exe -ErrorAction SilentlyContinue
-  }
-  if (-not $gitCommand) {
-    $gitCommand = Get-Command git -ErrorAction SilentlyContinue
-  }
-  if (-not $gitCommand) {
-    Write-Update "Git no esta instalado. El programa iniciara sin comprobar actualizaciones." "Yellow"
-    exit 0
-  }
-  $script:GitExe = $gitCommand.Source
-
-  if (-not $SkipFetch -and -not (Start-Fetch)) {
+  $metadataFetched = Ensure-GitMetadata
+  if (-not $SkipFetch -and -not $metadataFetched -and -not (Start-Fetch)) {
     exit 0
   }
 
@@ -357,7 +481,7 @@ try {
   $remoteRevision = $remoteResult.Text
   $changes = @(Get-WorkingTreeChanges)
   $codeChanges = @($changes | Where-Object { -not $_.Runtime })
-  $needsRepair = $codeChanges.Count -gt 0
+  $needsRepair = $codeChanges.Count -gt 0 -or -not (Test-RequiredProgramFiles)
 
   if ($localRevision -eq $remoteRevision -and -not $needsRepair) {
     Write-Update "El programa ya esta actualizado."
@@ -447,12 +571,7 @@ La contabilidad, imagenes y configuracion local se conservaran. Los archivos mod
       "-e", "tools/ngrok/public-url.txt",
       "-e", "tools/cloudflare-worker/public-url.txt"
     ) | Out-Null
-    foreach ($requiredPath in @(
-      "server.py",
-      "tools\start-barberia.ps1",
-      "tools\update-barberia.ps1",
-      "frontend\dist\frontend\browser\index.html"
-    )) {
+    foreach ($requiredPath in $RequiredProgramPaths) {
       if (-not (Test-Path -LiteralPath (Join-Path $AppRoot $requiredPath))) {
         throw "La recuperacion no encontro el archivo requerido: $requiredPath"
       }

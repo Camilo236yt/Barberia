@@ -1,6 +1,7 @@
 param(
   [string]$RepositoryUrl = "https://github.com/Camilo236yt/Barberia.git",
   [string]$InstallPath = "",
+  [string]$NgrokAuthtoken = "",
   [switch]$NoLaunch
 )
 
@@ -12,6 +13,7 @@ if (-not $InstallPath) {
 $DependencyRoot = Join-Path $env:LOCALAPPDATA "CapitanGold"
 $PythonVersion = "3.13.14"
 $PythonSha256 = "90b4e5b9898b72d744650524bff92377c367f44bd5fbd09e3148656c080ad907"
+$InstallerRoot = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 
 function Write-Install($Message) {
   Write-Host "[Instalador] $Message"
@@ -147,14 +149,119 @@ function Install-Ngrok {
   }
 }
 
+function Get-InstallerNgrokAuthtoken {
+  if ($NgrokAuthtoken) {
+    return $NgrokAuthtoken.Trim()
+  }
+
+  foreach ($candidate in @(
+    (Join-Path $InstallerRoot "ngrok-authtoken.local.txt"),
+    (Join-Path $InstallerRoot "ngrok-authtoken.txt"),
+    (Join-Path $InstallerRoot "tools\ngrok\authtoken.txt")
+  )) {
+    if (Test-Path -LiteralPath $candidate) {
+      $token = (Get-Content -LiteralPath $candidate -Raw).Trim()
+      if ($token) {
+        return $token
+      }
+    }
+  }
+
+  foreach ($variableName in @("CAPITAN_GOLD_NGROK_AUTHTOKEN", "NGROK_AUTHTOKEN")) {
+    $token = [Environment]::GetEnvironmentVariable($variableName, "Process")
+    if (-not $token) {
+      $token = [Environment]::GetEnvironmentVariable($variableName, "User")
+    }
+    if ($token) {
+      return $token.Trim()
+    }
+  }
+
+  return ""
+}
+
+function Save-NgrokAuthtoken {
+  $token = Get-InstallerNgrokAuthtoken
+  if (-not $token) {
+    Write-Install "No se encontro un token de ngrok para dejar preconfigurado."
+    Write-Install "Si el acceso online lo pide, ejecuta Configurar Ngrok.cmd."
+    return
+  }
+  if ($token.Length -lt 20 -or $token -match "\s") {
+    throw "El token de ngrok incluido no tiene un formato valido."
+  }
+
+  $ngrokDirectory = Join-Path $InstallPath "tools\ngrok"
+  $tokenPath = Join-Path $ngrokDirectory "authtoken.txt"
+  New-Item -ItemType Directory -Path $ngrokDirectory -Force | Out-Null
+  [System.IO.File]::WriteAllText(
+    $tokenPath,
+    $token + [Environment]::NewLine,
+    [System.Text.UTF8Encoding]::new($false)
+  )
+  $token = $null
+  Write-Install "Token privado de ngrok guardado para este cliente."
+}
+
 function Remove-OldShortcuts {
   $desktop = [Environment]::GetFolderPath("Desktop")
-  foreach ($name in @("Capitan Gold.lnk", "Capitan Gold Internet.lnk")) {
+  foreach ($name in @(
+    "Capitan Gold.lnk",
+    "Capitan Gold Internet.lnk",
+    "Capitan Gold - Sin Internet.lnk",
+    "Capitan Gold - Con Internet.lnk",
+    "Barberia - Sin Internet.lnk",
+    "Barberia - Con Internet.lnk"
+  )) {
     $shortcut = Join-Path $desktop $name
     if (Test-Path -LiteralPath $shortcut) {
       Remove-Item -LiteralPath $shortcut -Force
     }
   }
+}
+
+function Get-ShortcutIconPath {
+  foreach ($candidate in @(
+    (Join-Path $InstallPath "frontend\public\favicon.ico"),
+    (Join-Path $InstallPath "frontend\dist\frontend\browser\favicon.ico")
+  )) {
+    if (Test-Path -LiteralPath $candidate) {
+      return $candidate
+    }
+  }
+  return ""
+}
+
+function New-BarberiaShortcut($Name, $TargetPath, $Description) {
+  if (-not (Test-Path -LiteralPath $TargetPath)) {
+    throw "No se encontro el archivo de inicio para el acceso directo: $TargetPath"
+  }
+
+  $desktop = [Environment]::GetFolderPath("Desktop")
+  $shortcutPath = Join-Path $desktop $Name
+  $iconPath = Get-ShortcutIconPath
+  $shell = New-Object -ComObject WScript.Shell
+  $shortcut = $shell.CreateShortcut($shortcutPath)
+  $shortcut.TargetPath = $TargetPath
+  $shortcut.WorkingDirectory = $InstallPath
+  $shortcut.Description = $Description
+  $shortcut.WindowStyle = 1
+  if ($iconPath) {
+    $shortcut.IconLocation = "$iconPath,0"
+  }
+  $shortcut.Save()
+}
+
+function Create-BarberiaShortcuts {
+  New-BarberiaShortcut `
+    "Barberia - Sin Internet.lnk" `
+    (Join-Path $InstallPath "Iniciar Barberia.cmd") `
+    "Inicia Capitan Gold Barberia en modo local, sin ngrok."
+
+  New-BarberiaShortcut `
+    "Barberia - Con Internet.lnk" `
+    (Join-Path $InstallPath "Iniciar Barberia Internet.cmd") `
+    "Inicia Capitan Gold Barberia con acceso online por ngrok."
 }
 
 try {
@@ -164,7 +271,11 @@ try {
 
   if (Test-Path -LiteralPath $InstallPath) {
     if (-not (Test-Path -LiteralPath (Join-Path $InstallPath ".git"))) {
-      throw "La carpeta de destino ya existe y no es una instalacion valida: $InstallPath"
+      Write-Install "La instalacion perdio su conexion con GitHub. Recuperandola..."
+      & $gitExe -C $InstallPath init --quiet
+      if ($LASTEXITCODE -ne 0) { throw "No se pudo reconstruir la informacion de Git." }
+      & $gitExe -C $InstallPath remote add origin $RepositoryUrl
+      if ($LASTEXITCODE -ne 0) { throw "No se pudo conectar la instalacion con GitHub." }
     }
     Write-Install "La aplicacion ya esta instalada. Buscando actualizaciones..."
     & $gitExe -C $InstallPath fetch --quiet origin main
@@ -203,7 +314,7 @@ try {
 
   $pythonExe = Install-PortablePython
   Install-Ngrok
-  Remove-OldShortcuts
+  Save-NgrokAuthtoken
 
   $serverPath = Join-Path $InstallPath "server.py"
   $frontendIndex = Join-Path $InstallPath "frontend\dist\frontend\browser\index.html"
@@ -214,11 +325,13 @@ try {
   if ($LASTEXITCODE -ne 0) {
     throw "El servidor descargado contiene un error."
   }
+  Remove-OldShortcuts
+  Create-BarberiaShortcuts
 
   Write-Host ""
   Write-Install "Instalacion completada en: $InstallPath"
   Write-Install "Dependencias listas: Git, Python y ngrok."
-  Write-Install "No se crearon accesos directos."
+  Write-Install "Accesos directos creados en el Escritorio: Barberia - Sin Internet y Barberia - Con Internet."
   Write-Install "Los meses anteriores no fueron descargados."
 
   if (-not $NoLaunch) {
