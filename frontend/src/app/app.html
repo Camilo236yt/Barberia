@@ -614,7 +614,54 @@
                 ({{ closureBarberRate(barber) * 100 | number:'1.0-0' }}%) · barbería {{ formatMoney(closureBarberShopShare(barber)) }}
               </span>
             </div>
-            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedSales(), showBranch: false }"></ng-container>
+            <p class="form-message history-action-message" [class.success]="historyActionMessageType === 'success'" [class.error]="historyActionMessageType === 'error'" *ngIf="historyActionMessage">
+              {{ historyActionMessage }}
+            </p>
+            <form id="history-sale-editor" class="history-sale-editor" *ngIf="editingSale" (ngSubmit)="saveSaleEdit()">
+              <div class="history-editor-heading">
+                <div>
+                  <p>Modificar corte</p>
+                  <h3>{{ saleDay(editingSale) }} · {{ timeOnly(editingSale.created_at) }}</h3>
+                </div>
+                <button class="small-button" type="button" (click)="cancelSaleEdit()">Cancelar</button>
+              </div>
+              <div class="history-editor-grid">
+                <label>
+                  <span>Barbero</span>
+                  <select name="editSaleBarber" [(ngModel)]="editSaleForm.barber_id" required>
+                    <option *ngIf="!barberIsAvailable(editingSale.barber_id)" [value]="editingSale.barber_id">{{ editingSale.barber_name }} (histórico)</option>
+                    <option *ngFor="let barber of barbers; trackBy: trackById" [value]="barber.id">{{ barber.name }}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Servicio</span>
+                  <input name="editSaleService" type="text" minlength="2" maxlength="60" [(ngModel)]="editSaleForm.service_name" required>
+                </label>
+                <label>
+                  <span>Valor cobrado</span>
+                  <input name="editSaleAmount" type="number" min="1" step="1000" [(ngModel)]="editSaleForm.amount" required>
+                </label>
+                <label>
+                  <span>Forma de pago</span>
+                  <select name="editSalePayment" [(ngModel)]="editSaleForm.payment_method" required>
+                    <option value="cash">Efectivo</option>
+                    <option value="nequi" [disabled]="!editingSale.proof_url">Nequi</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Cliente (opcional)</span>
+                  <input name="editSaleClient" type="text" maxlength="80" [(ngModel)]="editSaleForm.client_name">
+                </label>
+                <label>
+                  <span>Referencia (opcional)</span>
+                  <input name="editSaleProofNote" type="text" maxlength="120" [(ngModel)]="editSaleForm.proof_note">
+                </label>
+              </div>
+              <button class="primary-button history-save-button" type="submit" [disabled]="historySaleSaving">
+                {{ historySaleSaving ? 'Guardando...' : 'Guardar cambios' }}
+              </button>
+            </form>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedSales(), showBranch: false, allowActions: true }"></ng-container>
           </section>
           <ng-template #chooseClosure><section class="tool-panel history-detail empty-history"><div class="empty-state">Selecciona un cierre para ver su contabilidad completa</div></section></ng-template>
         </div>
@@ -710,7 +757,7 @@
     </main>
   </div>
 
-<ng-template #salesTable let-salesList="salesList" let-showBranch="showBranch">
+<ng-template #salesTable let-salesList="salesList" let-showBranch="showBranch" let-allowActions="allowActions">
   <div class="table-wrap">
     <table>
       <thead>
@@ -722,6 +769,7 @@
           <th>Pago</th>
           <th>Valor</th>
           <th>Estado</th>
+          <th *ngIf="allowActions">Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -738,8 +786,14 @@
           </td>
           <td data-label="Valor">{{ formatMoney(sale.amount) }}</td>
           <td data-label="Estado"><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
+          <td data-label="Acciones" *ngIf="allowActions">
+            <div class="history-row-actions">
+              <button class="small-button approve" type="button" (click)="startEditSale(sale)">Modificar</button>
+              <button class="small-button reject" type="button" (click)="deleteSale(sale)">Eliminar</button>
+            </div>
+          </td>
         </tr>
-        <tr *ngIf="!salesList.length"><td colspan="7">Sin ventas registradas</td></tr>
+        <tr *ngIf="!salesList.length"><td [attr.colspan]="allowActions ? 8 : 7">Sin ventas registradas</td></tr>
       </tbody>
     </table>
   </div>

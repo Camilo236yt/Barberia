@@ -278,6 +278,32 @@ def find_closure(db, date_key, branch_id):
     )
 
 
+def materialize_archived_sale(db, sale_id):
+    sale = find_by_id(db["sales"], sale_id)
+    if sale:
+        return sale
+
+    for archive_path in sorted(HISTORY_ARCHIVE_DIR.glob("*.zip"), reverse=True):
+        archived = read_history_archive(archive_path)
+        if not archived or not find_by_id(archived.get("sales", []), sale_id):
+            continue
+
+        known_sale_ids = {item.get("id") for item in db["sales"]}
+        for archived_sale in archived.get("sales", []):
+            if archived_sale.get("id") not in known_sale_ids:
+                db["sales"].append(archived_sale)
+                known_sale_ids.add(archived_sale.get("id"))
+
+        known_closure_ids = {item.get("id") for item in db["closures"]}
+        for archived_closure in archived.get("closures", []):
+            if archived_closure.get("id") not in known_closure_ids:
+                db["closures"].append(archived_closure)
+                known_closure_ids.add(archived_closure.get("id"))
+
+        return find_by_id(db["sales"], sale_id)
+    return None
+
+
 def is_day_closed(db, branch_id, date_key=None):
     closure = find_closure(db, date_key or today_key(), branch_id)
     return bool(closure and closure.get("status") == "closed")
@@ -357,6 +383,96 @@ def closure_snapshot(db, date_key, counted_cash, branch):
         "commission_rate": commission_rate,
         "barbers": barber_totals,
     }
+
+
+def refresh_closure_summary(db, date_key, branch):
+    closure = find_closure(db, date_key, branch["id"])
+    if not closure:
+        return None
+
+    sales = [
+        sale
+        for sale in db["sales"]
+        if item_day(sale) == date_key
+        and sale.get("branch_id") == branch["id"]
+        and sale.get("status") not in {"annulled", "rejected"}
+    ]
+    confirmed = [sale for sale in sales if sale.get("status") == "confirmed"]
+    pending = [sale for sale in sales if sale.get("status") == "pending_review"]
+    cash_total = sum(sale["amount"] for sale in confirmed if sale.get("payment_method") == "cash")
+    nequi_confirmed = sum(
+        sale["amount"] for sale in confirmed if sale.get("payment_method") == "nequi"
+    )
+    nequi_pending = sum(
+        sale["amount"] for sale in pending if sale.get("payment_method") == "nequi"
+    )
+
+    current_barbers = {
+        barber["id"]: barber
+        for barber in db["barbers"]
+        if barber.get("branch_id") == branch["id"]
+    }
+    previous_barbers = {
+        barber.get("barber_id"): barber
+        for barber in closure.get("barbers", [])
+        if barber.get("barber_id")
+    }
+    barber_ids = list(current_barbers)
+    for barber_id in previous_barbers:
+        if barber_id not in barber_ids:
+            barber_ids.append(barber_id)
+    for sale in confirmed:
+        if sale.get("barber_id") not in barber_ids:
+            barber_ids.append(sale.get("barber_id"))
+
+    barber_totals = []
+    for barber_id in barber_ids:
+        barber_sales = [sale for sale in confirmed if sale.get("barber_id") == barber_id]
+        current = current_barbers.get(barber_id)
+        previous = previous_barbers.get(barber_id, {})
+        if current:
+            rate = barber_commission_rate(current)
+            name = current["name"]
+        else:
+            try:
+                rate = float(previous.get("commission_rate", 0.5))
+            except (TypeError, ValueError):
+                rate = 0.5
+            if rate <= 0 or rate > 1:
+                rate = 0.5
+            name = previous.get("barber_name") or (
+                barber_sales[0].get("barber_name") if barber_sales else "Barbero"
+            )
+        total = sum(sale["amount"] for sale in barber_sales)
+        commission = int(round(total * rate))
+        barber_totals.append(
+            {
+                "barber_id": barber_id,
+                "barber_name": name,
+                "sales_count": len(barber_sales),
+                "total": total,
+                "commission_rate": rate,
+                "commission": commission,
+                "shop_share": total - commission,
+            }
+        )
+
+    counted_cash = int(closure.get("counted_cash", 0) or 0)
+    closure.update(
+        {
+            "expected_cash": cash_total,
+            "cash_difference": counted_cash - cash_total,
+            "total_confirmed": sum(sale["amount"] for sale in confirmed),
+            "cash_total": cash_total,
+            "nequi_confirmed": nequi_confirmed,
+            "nequi_pending": nequi_pending,
+            "sales_count": len(confirmed),
+            "pending_nequi_count": len(pending),
+            "barbers": barber_totals,
+            "modified_at": now_iso(),
+        }
+    )
+    return closure
 
 
 def save_proof_image(data_url, sale_id):
@@ -956,6 +1072,18 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                     return
                 self.create_sale()
                 return
+            if re.match(r"^/api/sales/[^/]+$", path):
+                role = self.require_admin_role()
+                if not role or not self.branch_scope(role):
+                    return
+                self.update_sale(path.split("/")[3])
+                return
+            if re.match(r"^/api/sales/[^/]+/delete$", path):
+                role = self.require_admin_role()
+                if not role or not self.branch_scope(role):
+                    return
+                self.delete_sale(path.split("/")[3])
+                return
             if re.match(r"^/api/sales/[^/]+/status$", path):
                 role = self.require_admin_role()
                 if not role:
@@ -1270,6 +1398,87 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             write_db(db)
             publish_data_change()
             self.send_json({"sale": sale}, 201)
+
+    def update_sale(self, sale_id):
+        payload = self.read_json_body()
+        service_name = validated_name(payload.get("service_name"), "servicio")
+        amount = money_to_int(payload.get("amount"))
+        if not amount:
+            raise ValueError("El valor cobrado debe ser mayor a cero.")
+        payment_method = payload.get("payment_method")
+        if payment_method not in {"cash", "nequi"}:
+            raise ValueError("Selecciona efectivo o Nequi.")
+
+        with LOCK:
+            db = read_db()
+            sale = materialize_archived_sale(db, sale_id)
+            if not sale:
+                self.send_json({"error": "Venta no encontrada."}, 404)
+                return
+            branch_id = self.headers.get("X-Branch-Id")
+            if sale.get("branch_id") != branch_id:
+                self.send_json({"error": "Esta venta pertenece a otra barberia."}, 403)
+                return
+
+            barber = find_by_id(db["barbers"], payload.get("barber_id"))
+            if barber and barber.get("branch_id") != branch_id:
+                raise ValueError("Selecciona un barbero valido.")
+            if not barber and payload.get("barber_id") != sale.get("barber_id"):
+                raise ValueError("Selecciona un barbero valido.")
+            if payment_method == "nequi" and not sale.get("proof_url"):
+                raise ValueError("No puedes cambiar a Nequi una venta que no tiene comprobante.")
+
+            sale.update(
+                {
+                    "barber_id": barber["id"] if barber else sale["barber_id"],
+                    "barber_name": barber["name"] if barber else sale["barber_name"],
+                    "service_name": service_name,
+                    "amount": amount,
+                    "payment_method": payment_method,
+                    "client_name": str(payload.get("client_name") or "").strip()[:80],
+                    "proof_note": str(payload.get("proof_note") or "").strip()[:120],
+                    "updated_at": now_iso(),
+                }
+            )
+            if payment_method == "cash" and sale.get("status") == "pending_review":
+                sale["status"] = "confirmed"
+
+            date_key = item_day(sale)
+            branch = find_by_id(db["branches"], branch_id)
+            refresh_closure_summary(db, date_key, branch)
+            write_db(db)
+            if find_closure(db, date_key, branch_id) or (
+                HISTORY_ARCHIVE_DIR / f"{date_key}.zip"
+            ).exists():
+                write_history_archive(db, date_key)
+                queue_history_backup(date_key)
+            publish_data_change()
+            self.send_json({"sale": sale})
+
+    def delete_sale(self, sale_id):
+        with LOCK:
+            db = read_db()
+            sale = materialize_archived_sale(db, sale_id)
+            if not sale:
+                self.send_json({"error": "Venta no encontrada."}, 404)
+                return
+            branch_id = self.headers.get("X-Branch-Id")
+            if sale.get("branch_id") != branch_id:
+                self.send_json({"error": "Esta venta pertenece a otra barberia."}, 403)
+                return
+
+            date_key = item_day(sale)
+            db["sales"] = [item for item in db["sales"] if item.get("id") != sale_id]
+            branch = find_by_id(db["branches"], branch_id)
+            refresh_closure_summary(db, date_key, branch)
+            write_db(db)
+            if find_closure(db, date_key, branch_id) or (
+                HISTORY_ARCHIVE_DIR / f"{date_key}.zip"
+            ).exists():
+                write_history_archive(db, date_key)
+                queue_history_backup(date_key)
+            publish_data_change()
+            self.send_json({"deleted": sale_id})
 
     def update_sale_status(self, sale_id):
         payload = self.read_json_body()

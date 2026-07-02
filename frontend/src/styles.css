@@ -2160,6 +2160,66 @@ body {
   gap: 16px;
 }
 
+.history-action-message {
+  margin: 0;
+}
+
+.history-sale-editor {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #d4c09b;
+  border-radius: 12px;
+  background: #fffaf0;
+  padding: 16px;
+}
+
+.history-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-editor-heading p,
+.history-editor-heading h3 {
+  margin: 0;
+}
+
+.history-editor-heading p {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.history-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.history-editor-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.history-editor-grid label > span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.history-save-button {
+  width: fit-content;
+  min-width: 180px;
+}
+
+.history-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .empty-history {
   min-height: 230px;
   align-content: center;
@@ -3026,6 +3086,18 @@ button:focus-visible {
   td[colspan] {
     justify-content: center;
     text-align: center;
+  }
+
+  .history-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-save-button {
+    width: 100%;
+  }
+
+  .history-row-actions {
+    justify-content: flex-end;
   }
 
   .bar-chart {

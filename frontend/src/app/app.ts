@@ -186,6 +186,18 @@ export class App implements OnInit, OnDestroy {
   historyBackupLoading = false;
   historyBackupMessage = '';
   historyBackupMessageType: 'success' | 'error' | '' = '';
+  historyActionMessage = '';
+  historyActionMessageType: 'success' | 'error' | '' = '';
+  editingSale: Sale | null = null;
+  historySaleSaving = false;
+  editSaleForm = {
+    barber_id: '',
+    service_name: '',
+    amount: 0,
+    payment_method: 'cash' as PaymentMethod,
+    client_name: '',
+    proof_note: '',
+  };
   backupProgressVisible = false;
   backupProgress = 0;
   backupProgressState: 'queued' | 'uploading' | 'success' | 'error' = 'queued';
@@ -579,6 +591,76 @@ export class App implements OnInit, OnDestroy {
       await this.loadData(true);
     } catch (error) {
       window.alert(this.errorMessage(error));
+    }
+  }
+
+  startEditSale(sale: Sale): void {
+    this.editingSale = sale;
+    this.editSaleForm = {
+      barber_id: sale.barber_id,
+      service_name: sale.service_name,
+      amount: sale.amount,
+      payment_method: sale.payment_method,
+      client_name: sale.client_name || '',
+      proof_note: sale.proof_note || '',
+    };
+    this.historyActionMessage = '';
+    window.setTimeout(() => {
+      document.getElementById('history-sale-editor')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+  }
+
+  cancelSaleEdit(): void {
+    this.editingSale = null;
+  }
+
+  barberIsAvailable(barberId: string): boolean {
+    return this.barbers.some((barber) => barber.id === barberId);
+  }
+
+  async saveSaleEdit(): Promise<void> {
+    if (!this.editingSale || this.historySaleSaving) return;
+    this.historySaleSaving = true;
+    try {
+      await this.api(`/api/sales/${this.editingSale.id}`, {
+        method: 'POST',
+        body: JSON.stringify(this.editSaleForm),
+      });
+      this.editingSale = null;
+      this.historyActionMessage = 'Corte modificado correctamente.';
+      this.historyActionMessageType = 'success';
+      await this.loadData(true);
+    } catch (error) {
+      this.historyActionMessage = this.errorMessage(error);
+      this.historyActionMessageType = 'error';
+    } finally {
+      this.historySaleSaving = false;
+      this.renderNow();
+    }
+  }
+
+  async deleteSale(sale: Sale): Promise<void> {
+    const confirmed = window.confirm(
+      `¿Eliminar este corte del historial?\n\n${this.saleDay(sale)} · ${sale.barber_name} · ${sale.service_name} · ${this.formatMoney(sale.amount)}\n\nEsta acción no se puede deshacer.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await this.api(`/api/sales/${sale.id}/delete`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      if (this.editingSale?.id === sale.id) this.editingSale = null;
+      this.historyActionMessage = 'Corte eliminado correctamente.';
+      this.historyActionMessageType = 'success';
+      await this.loadData(true);
+    } catch (error) {
+      this.historyActionMessage = this.errorMessage(error);
+      this.historyActionMessageType = 'error';
+      this.renderNow();
     }
   }
 
