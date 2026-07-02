@@ -1,89 +1,101 @@
 {
   "barbers": [
     {
-      "id": "carlos",
-      "name": "Carlos",
+      "id": "jose",
+      "name": "Jose",
       "active": true,
       "branch_id": "barberia-1"
     },
     {
-      "id": "andres",
-      "name": "Andres",
+      "id": "luis",
+      "name": "Luís",
       "active": true,
       "branch_id": "barberia-1"
     },
     {
-      "id": "miguel",
-      "name": "Miguel",
+      "id": "samuel",
+      "name": "Samuel",
       "active": true,
       "branch_id": "barberia-1"
     },
     {
-      "id": "carlos-b2",
-      "name": "Carlos",
+      "id": "omar",
+      "name": "Omar",
       "active": true,
       "branch_id": "barberia-2"
     },
     {
-      "id": "andres-b2",
-      "name": "Andres",
+      "id": "randy",
+      "name": "Randy",
       "active": true,
       "branch_id": "barberia-2"
     },
     {
-      "id": "miguel-b2",
-      "name": "Miguel",
+      "id": "juan",
+      "name": "Juan",
       "active": true,
       "branch_id": "barberia-2"
     }
   ],
   "services": [
     {
-      "id": "corte",
-      "name": "Corte",
-      "price": 20000,
+      "id": "tijeras",
+      "name": "Corte con tijeras",
+      "price": 25000,
+      "branch_id": "barberia-1"
+    },
+    {
+      "id": "basico",
+      "name": "Corte básico",
+      "price": 23000,
       "branch_id": "barberia-1"
     },
     {
       "id": "barba",
       "name": "Barba",
-      "price": 12000,
+      "price": 15000,
       "branch_id": "barberia-1"
     },
     {
       "id": "combo",
-      "name": "Corte + barba",
-      "price": 30000,
+      "name": "Corte y barba",
+      "price": 35000,
       "branch_id": "barberia-1"
     },
     {
-      "id": "cejas",
-      "name": "Cejas",
-      "price": 7000,
+      "id": "combo-tijeras",
+      "name": "Corte con tijeras y barba",
+      "price": 40000,
       "branch_id": "barberia-1"
     },
     {
-      "id": "corte-b2",
-      "name": "Corte",
-      "price": 20000,
+      "id": "tijeras-b2",
+      "name": "Corte con tijeras",
+      "price": 25000,
+      "branch_id": "barberia-2"
+    },
+    {
+      "id": "basico-b2",
+      "name": "Corte básico",
+      "price": 23000,
       "branch_id": "barberia-2"
     },
     {
       "id": "barba-b2",
       "name": "Barba",
-      "price": 12000,
+      "price": 15000,
       "branch_id": "barberia-2"
     },
     {
       "id": "combo-b2",
-      "name": "Corte + barba",
-      "price": 30000,
+      "name": "Corte y barba",
+      "price": 35000,
       "branch_id": "barberia-2"
     },
     {
-      "id": "cejas-b2",
-      "name": "Cejas",
-      "price": 7000,
+      "id": "combo-tijeras-b2",
+      "name": "Corte con tijeras y barba",
+      "price": 40000,
       "branch_id": "barberia-2"
     }
   ],
@@ -785,7 +797,8 @@
   "settings": {
     "commission_rate": 0.5,
     "currency": "COP",
-    "business_whatsapp_country_code": "57"
+    "business_whatsapp_country_code": "57",
+    "catalog_version": 2
   },
   "closures": [
     {
@@ -793,11 +806,11 @@
       "date": "2026-07-01",
       "branch_id": "barberia-1",
       "branch_name": "Barbería 1",
-      "closed_at": "2026-07-01T18:49:31",
+      "closed_at": "2026-07-01T18:56:21",
       "status": "reopened",
-      "counted_cash": 100040,
+      "counted_cash": 100000,
       "expected_cash": 81002,
-      "cash_difference": 19038,
+      "cash_difference": 18998,
       "total_confirmed": 81002,
       "cash_total": 81002,
       "nequi_confirmed": 0,
@@ -858,9 +871,24 @@
         {
           "type": "reopened",
           "at": "2026-07-01T18:49:34"
+        },
+        {
+          "type": "closed",
+          "at": "2026-07-01T18:56:21",
+          "counted_cash": 100000,
+          "expected_cash": 81002,
+          "cash_difference": 18998,
+          "total_confirmed": 81002,
+          "cash_total": 81002,
+          "nequi_confirmed": 0,
+          "sales_count": 3
+        },
+        {
+          "type": "reopened",
+          "at": "2026-07-01T18:56:25"
         }
       ],
-      "reopened_at": "2026-07-01T18:49:34"
+      "reopened_at": "2026-07-01T18:56:25"
     },
     {
       "id": "63275cf7ea06",
@@ -994,12 +1022,12 @@
   "branches": [
     {
       "id": "barberia-1",
-      "name": "Barbería 1",
+      "name": "Barbería de Arriba",
       "active": true
     },
     {
       "id": "barberia-2",
-      "name": "Barbería 2",
+      "name": "Barbería de Abajo",
       "active": true
     }
   ]

@@ -1,0 +1,17 @@
+# Datos y credenciales propios de cada instalacion
+data/
+LINK_ADMIN_ONLINE.txt
+tools/logs/
+tools/ngrok/authtoken.txt
+tools/ngrok/public-url.txt
+tools/cloudflare-worker/public-url.txt
+
+# Archivos generados
+__pycache__/
+*.pyc
+frontend/dist/
+frontend/node_modules/
+
+# Respaldos y temporales locales
+tools/backups/
+*.tmp

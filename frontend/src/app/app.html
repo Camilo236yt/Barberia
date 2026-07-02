@@ -2,13 +2,13 @@
 
 <div class="branch-gate" *ngIf="branchPickerOpen && !accessLoading">
   <div class="branch-gate-card">
-    <div class="brand-mark large">B</div>
+    <img class="brand-logo large" src="/capitan-gold-logo.png" alt="Capitan Gold Barber Shop">
     <span class="eyebrow">{{ adminRole === 'online' ? 'Administrador online' : 'Administrador local' }}</span>
     <h1>Selecciona tu barbería</h1>
     <p>La sede tomada por el otro administrador no estará disponible.</p>
     <div class="branch-options" *ngIf="availableBranches.length; else noAvailableBranch">
       <button type="button" *ngFor="let branch of availableBranches; trackBy: trackById" (click)="selectBranch(branch.id)">
-        <span class="branch-number">{{ branch.name.slice(-1) }}</span>
+        <span class="branch-number">{{ branch.id === 'barberia-1' ? '↑' : '↓' }}</span>
         <span>
           <strong>{{ branch.name }}</strong>
           <small>Entrar a administración</small>
@@ -29,10 +29,10 @@
 <div class="admin-shell" *ngIf="activeBranchId && !branchPickerOpen">
     <aside class="admin-sidebar">
       <div class="sidebar-brand">
-        <div class="brand-mark">B</div>
+        <img class="brand-logo sidebar-logo" src="/capitan-gold-logo.png" alt="Capitan Gold">
         <div>
           <span>Administración</span>
-          <strong>Barbería Control</strong>
+          <strong>Capitan Gold</strong>
         </div>
       </div>
 
@@ -209,12 +209,20 @@
 
             <div *ngIf="isCurrentDayClosed()" class="lock-banner">La caja está cerrada. Reábrela desde Contabilidad.</div>
             <fieldset [disabled]="isCurrentDayClosed()">
-              <label class="field">
+              <div class="field">
                 <span>Barbero que realizó el servicio</span>
-                <select name="barber" [(ngModel)]="saleForm.barber_id" required>
-                  <option *ngFor="let barber of barbers; trackBy: trackById" [value]="barber.id">{{ barber.name }}</option>
-                </select>
-              </label>
+                <div class="barber-choice-grid">
+                  <button
+                    *ngFor="let barber of barbers; trackBy: trackById"
+                    type="button"
+                    [class.active]="saleForm.barber_id === barber.id"
+                    (click)="selectBarber(barber.id)"
+                  >
+                    <span class="avatar">{{ barber.name.charAt(0) }}</span>
+                    <strong>{{ barber.name }}</strong>
+                  </button>
+                </div>
+              </div>
 
               <div class="field">
                 <span>Servicio</span>
@@ -601,18 +609,18 @@
       </thead>
       <tbody>
         <tr *ngFor="let sale of salesList; trackBy: trackById">
-          <td>{{ saleDay(sale) }} · {{ timeOnly(sale.created_at) }}</td>
-          <td *ngIf="showBranch">{{ sale.branch_name }}</td>
-          <td>{{ sale.barber_name }}</td>
-          <td>{{ sale.service_name }}</td>
-          <td>
+          <td data-label="Fecha">{{ saleDay(sale) }} · {{ timeOnly(sale.created_at) }}</td>
+          <td data-label="Sede" *ngIf="showBranch">{{ sale.branch_name }}</td>
+          <td data-label="Barbero">{{ sale.barber_name }}</td>
+          <td data-label="Servicio">{{ sale.service_name }}</td>
+          <td data-label="Pago">
             <a *ngIf="sale.proof_url" [href]="sale.proof_url" target="_blank" rel="noopener">
               <span class="payment-tag" [class.cash]="sale.payment_method === 'cash'" [class.nequi]="sale.payment_method === 'nequi'">{{ paymentLabel(sale.payment_method) }}</span>
             </a>
             <span *ngIf="!sale.proof_url" class="payment-tag cash">{{ paymentLabel(sale.payment_method) }}</span>
           </td>
-          <td>{{ formatMoney(sale.amount) }}</td>
-          <td><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
+          <td data-label="Valor">{{ formatMoney(sale.amount) }}</td>
+          <td data-label="Estado"><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
         </tr>
         <tr *ngIf="!salesList.length"><td colspan="7">Sin ventas registradas</td></tr>
       </tbody>

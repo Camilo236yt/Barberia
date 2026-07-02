@@ -1,15 +1,15 @@
 {
-  "name": "Barberia Control",
-  "short_name": "Barberia",
+  "name": "Capitan Gold Barber Shop",
+  "short_name": "Capitan Gold",
   "start_url": "/admin",
   "display": "standalone",
-  "background_color": "#f6f3ee",
-  "theme_color": "#111827",
+  "background_color": "#100d0a",
+  "theme_color": "#100d0a",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/capitan-gold-logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

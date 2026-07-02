@@ -313,6 +313,10 @@ export class App implements OnInit, OnDestroy {
     this.saleForm.amount = service.price;
   }
 
+  selectBarber(barberId: string): void {
+    this.saleForm.barber_id = barberId;
+  }
+
   selectSpecialService(): void {
     this.isSpecialService = true;
     this.selectedServiceId = '';

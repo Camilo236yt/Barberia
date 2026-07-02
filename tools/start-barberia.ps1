@@ -2,7 +2,8 @@ param(
   [switch]$NoBrowser,
   [switch]$NoPause,
   [switch]$CheckOnly,
-  [switch]$Internet
+  [switch]$Internet,
+  [switch]$SkipUpdateCheck
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,6 +18,18 @@ $OnlineLinkPath = Join-Path $AppRoot "LINK_ADMIN_ONLINE.txt"
 
 function Write-Step($Message) {
   Write-Host "[Barberia] $Message"
+}
+
+function Invoke-UpdateCheck {
+  $updater = Join-Path $AppRoot "tools\update-barberia.ps1"
+  if (-not (Test-Path -LiteralPath $updater)) {
+    Write-Step "No se encontro el comprobador de actualizaciones; se continuara normalmente."
+    return
+  }
+
+  Write-Step "Buscando actualizaciones en GitHub..."
+  $windowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+  & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "`"$updater`"" -AppRoot "`"$AppRoot`""
 }
 
 function Find-Python {
@@ -65,7 +78,16 @@ function Build-Frontend {
   }
 
   $frontend = Join-Path $AppRoot "frontend"
-  if (-not (Test-Path (Join-Path $frontend "node_modules"))) {
+  $nodeModules = Join-Path $frontend "node_modules"
+  $dependencyStamp = Join-Path $nodeModules ".package-lock.json"
+  $packageLock = Join-Path $frontend "package-lock.json"
+  $needsDependencies = -not (Test-Path $nodeModules)
+  if (-not $needsDependencies -and (Test-Path $packageLock)) {
+    $needsDependencies = -not (Test-Path $dependencyStamp) -or
+      (Get-Item $packageLock).LastWriteTimeUtc -gt (Get-Item $dependencyStamp).LastWriteTimeUtc
+  }
+
+  if ($needsDependencies) {
     Write-Step "Instalando dependencias del panel..."
     & $npm install --prefix $frontend
     if ($LASTEXITCODE -ne 0) {
@@ -131,6 +153,10 @@ try {
   Set-Location $AppRoot
   if (-not (Test-Path "server.py")) {
     throw "No se encontro server.py en $AppRoot."
+  }
+
+  if (-not $SkipUpdateCheck) {
+    Invoke-UpdateCheck
   }
 
   Build-Frontend

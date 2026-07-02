@@ -29,19 +29,38 @@ ADMIN_ASSIGNMENT_LOCK = threading.Lock()
 
 DEFAULT_DB = {
     "branches": [
-        {"id": "barberia-1", "name": "Barbería 1", "active": True},
-        {"id": "barberia-2", "name": "Barbería 2", "active": True},
+        {"id": "barberia-1", "name": "Barbería de Arriba", "active": True},
+        {"id": "barberia-2", "name": "Barbería de Abajo", "active": True},
     ],
     "barbers": [
-        {"id": "carlos", "name": "Carlos", "active": True},
-        {"id": "andres", "name": "Andres", "active": True},
-        {"id": "miguel", "name": "Miguel", "active": True},
+        {"id": "jose", "name": "Jose", "active": True, "branch_id": "barberia-1"},
+        {"id": "luis", "name": "Luís", "active": True, "branch_id": "barberia-1"},
+        {"id": "samuel", "name": "Samuel", "active": True, "branch_id": "barberia-1"},
+        {"id": "omar", "name": "Omar", "active": True, "branch_id": "barberia-2"},
+        {"id": "randy", "name": "Randy", "active": True, "branch_id": "barberia-2"},
+        {"id": "juan", "name": "Juan", "active": True, "branch_id": "barberia-2"},
     ],
     "services": [
-        {"id": "corte", "name": "Corte", "price": 20000},
-        {"id": "barba", "name": "Barba", "price": 12000},
-        {"id": "combo", "name": "Corte + barba", "price": 30000},
-        {"id": "cejas", "name": "Cejas", "price": 7000},
+        {"id": "tijeras", "name": "Corte con tijeras", "price": 25000, "branch_id": "barberia-1"},
+        {"id": "basico", "name": "Corte básico", "price": 23000, "branch_id": "barberia-1"},
+        {"id": "barba", "name": "Barba", "price": 15000, "branch_id": "barberia-1"},
+        {"id": "combo", "name": "Corte y barba", "price": 35000, "branch_id": "barberia-1"},
+        {
+            "id": "combo-tijeras",
+            "name": "Corte con tijeras y barba",
+            "price": 40000,
+            "branch_id": "barberia-1",
+        },
+        {"id": "tijeras-b2", "name": "Corte con tijeras", "price": 25000, "branch_id": "barberia-2"},
+        {"id": "basico-b2", "name": "Corte básico", "price": 23000, "branch_id": "barberia-2"},
+        {"id": "barba-b2", "name": "Barba", "price": 15000, "branch_id": "barberia-2"},
+        {"id": "combo-b2", "name": "Corte y barba", "price": 35000, "branch_id": "barberia-2"},
+        {
+            "id": "combo-tijeras-b2",
+            "name": "Corte con tijeras y barba",
+            "price": 40000,
+            "branch_id": "barberia-2",
+        },
     ],
     "sales": [],
     "closures": [],
@@ -49,6 +68,7 @@ DEFAULT_DB = {
         "commission_rate": 0.5,
         "currency": "COP",
         "business_whatsapp_country_code": "57",
+        "catalog_version": 2,
     },
 }
 
@@ -115,6 +135,7 @@ def read_db():
         if key not in data:
             data[key] = DEFAULT_DB[key]
             changed = True
+    previous_catalog_version = int(data.get("settings", {}).get("catalog_version", 0) or 0)
     if "settings" not in data:
         data["settings"] = DEFAULT_DB["settings"]
         changed = True
@@ -123,6 +144,13 @@ def read_db():
             if key not in data["settings"]:
                 data["settings"][key] = value
                 changed = True
+
+    if previous_catalog_version < 2:
+        data["branches"] = [dict(branch) for branch in DEFAULT_DB["branches"]]
+        data["barbers"] = [dict(barber) for barber in DEFAULT_DB["barbers"]]
+        data["services"] = [dict(service) for service in DEFAULT_DB["services"]]
+        data["settings"]["catalog_version"] = 2
+        changed = True
 
     for collection_name in ["barbers", "services"]:
         unassigned = [item for item in data[collection_name] if not item.get("branch_id")]
