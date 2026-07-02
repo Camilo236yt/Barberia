@@ -278,6 +278,10 @@
                   <input name="client" type="text" [(ngModel)]="saleForm.client_name">
                 </label>
               </div>
+              <div class="tip-reference-card" *ngIf="newSaleTip() > 0">
+                <div><span>Precio base</span><strong>{{ formatMoney(selectedServicePrice()) }}</strong></div>
+                <div><span>Propina para el barbero</span><strong>{{ formatMoney(newSaleTip()) }}</strong></div>
+              </div>
 
               <div class="field">
                 <span>Método de pago</span>
@@ -286,6 +290,10 @@
                   <button class="segment" [class.active]="selectedPayment === 'nequi'" type="button" (click)="setPayment('nequi')">Nequi</button>
                 </div>
               </div>
+              <label class="field reference-field">
+                <span>Referencia (opcional)</span>
+                <input name="proofNote" type="text" maxlength="120" placeholder="Número, nota o detalle del pago" [(ngModel)]="saleForm.proof_note">
+              </label>
 
               <div class="proof-panel" *ngIf="selectedPayment === 'nequi'">
                 <div class="proof-actions">
@@ -296,10 +304,6 @@
                   <img *ngIf="proofPreviewUrl; else emptyProof" [src]="proofPreviewUrl" alt="Comprobante">
                   <ng-template #emptyProof><span>Comprobante Nequi</span></ng-template>
                 </div>
-                <label class="field">
-                  <span>Referencia</span>
-                  <input name="proofNote" type="text" [(ngModel)]="saleForm.proof_note">
-                </label>
               </div>
 
               <button class="primary-button" type="submit">Guardar venta en {{ activeBranch()?.name }}</button>
@@ -324,7 +328,11 @@
               <article class="activity-item compact shift-sale-item" *ngFor="let sale of selectedBarberSales().slice(0, 8); trackBy: trackById">
                 <ng-container *ngIf="editingShiftSaleId !== sale.id; else shiftAmountEditor">
                   <div class="shift-sale-main">
-                    <div><strong>{{ sale.service_name }}</strong><span class="sale-meta">{{ timeOnly(sale.created_at) }}</span></div>
+                    <div>
+                      <strong>{{ sale.service_name }}</strong>
+                      <span class="sale-meta">{{ timeOnly(sale.created_at) }}</span>
+                      <span class="tip-tag" *ngIf="saleTip(sale) > 0">Propina {{ formatMoney(saleTip(sale)) }}</span>
+                    </div>
                     <strong>{{ formatMoney(sale.amount) }}</strong>
                   </div>
                   <div class="shift-sale-actions">
@@ -460,6 +468,16 @@
               <input name="accountingSaleProofNote" type="text" maxlength="120" [(ngModel)]="accountingSaleForm.proof_note">
             </label>
           </div>
+          <div class="tip-reference-card accounting-tip-reference" *ngIf="accountingSaleTip() > 0">
+            <div>
+              <span>Precio base</span>
+              <strong>{{ formatMoney(accountingSaleForm.amount - accountingSaleTip()) }}</strong>
+            </div>
+            <div>
+              <span>Propina para el barbero</span>
+              <strong>{{ formatMoney(accountingSaleTip()) }}</strong>
+            </div>
+          </div>
           <div class="accounting-proof-panel" *ngIf="accountingSaleForm.payment_method === 'nequi'">
             <label class="secondary-button file-button">
               Subir comprobante
@@ -593,6 +611,7 @@
                 </div>
                 <div class="payout-breakdown">
                   <div><span>Facturado</span><strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong></div>
+                  <div class="tip-share"><span>Propina</span><strong>{{ formatMoney(accountingBarberTip(barber.id)) }}</strong></div>
                   <div class="barber-share"><span>Entregar a {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
                   <div><span>Para la barbería ({{ 100 - commissionPercent(barber.id) }}%)</span><strong>{{ formatMoney(accountingBarberShopShare(barber.id)) }}</strong></div>
                 </div>
@@ -717,7 +736,7 @@
             <div class="closure-barbers" *ngIf="selectedClosureBarbers().length">
               <span *ngFor="let barber of selectedClosureBarbers()">
                 {{ barber.barber_name }}: entregar {{ formatMoney(closureBarberCommission(barber)) }}
-                ({{ closureBarberRate(barber) * 100 | number:'1.0-0' }}%) · barbería {{ formatMoney(closureBarberShopShare(barber)) }}
+                ({{ closureBarberRate(barber) * 100 | number:'1.0-0' }}%) · propina {{ formatMoney(barber.tip_total || 0) }} · barbería {{ formatMoney(closureBarberShopShare(barber)) }}
               </span>
             </div>
             <p class="form-message history-action-message" [class.success]="historyActionMessageType === 'success'" [class.error]="historyActionMessageType === 'error'" *ngIf="historyActionMessage">
@@ -890,7 +909,10 @@
             </a>
             <span *ngIf="!sale.proof_url" class="payment-tag cash">{{ paymentLabel(sale.payment_method) }}</span>
           </td>
-          <td data-label="Valor">{{ formatMoney(sale.amount) }}</td>
+          <td data-label="Valor">
+            {{ formatMoney(sale.amount) }}
+            <span class="tip-tag table-tip" *ngIf="saleTip(sale) > 0">Propina {{ formatMoney(saleTip(sale)) }}</span>
+          </td>
           <td data-label="Estado"><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
           <td data-label="Acciones" *ngIf="allowActions">
             <div class="history-row-actions">

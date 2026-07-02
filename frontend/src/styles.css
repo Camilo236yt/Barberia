@@ -329,6 +329,49 @@ button:focus-visible {
   margin-bottom: 14px;
 }
 
+.tip-reference-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border: 1px solid #dfbd70;
+  border-radius: 10px;
+  background: #fff8e8;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.tip-reference-card > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tip-reference-card span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.tip-reference-card strong,
+.tip-tag {
+  color: #815d08;
+}
+
+.tip-tag {
+  display: block;
+  width: fit-content;
+  border-radius: 999px;
+  background: #fff0c9;
+  padding: 3px 7px;
+  margin-top: 5px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.table-tip {
+  margin-top: 4px;
+}
+
 .file-input {
   display: none;
 }
@@ -996,6 +1039,10 @@ th {
 .payout-breakdown .barber-share strong {
   color: #7a5b00;
   font-size: 1.08rem;
+}
+
+.payout-breakdown .tip-share strong {
+  color: #9a6d00;
 }
 
 .cash-diff {

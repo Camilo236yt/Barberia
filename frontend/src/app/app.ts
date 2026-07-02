@@ -38,6 +38,9 @@ interface Sale {
   service_id: string;
   service_name: string;
   amount: number;
+  base_amount?: number;
+  listed_price?: number | null;
+  tip_amount?: number;
   payment_method: PaymentMethod;
   proof_url?: string | null;
   proof_note: string;
@@ -51,6 +54,8 @@ interface ClosureBarber {
   barber_name: string;
   sales_count: number;
   total: number;
+  base_total?: number;
+  tip_total?: number;
   commission: number;
   commission_rate?: number;
   shop_share?: number;
@@ -464,6 +469,31 @@ export class App implements OnInit, OnDestroy {
     this.selectedServiceId = '';
     this.specialServiceName = '';
     this.saleForm.amount = 0;
+  }
+
+  selectedServicePrice(): number {
+    return this.services.find((service) => service.id === this.selectedServiceId)?.price || 0;
+  }
+
+  newSaleTip(): number {
+    if (this.isSpecialService || !this.selectedServiceId) return 0;
+    return Math.max(0, Number(this.saleForm.amount || 0) - this.selectedServicePrice());
+  }
+
+  accountingSaleTip(): number {
+    if (this.accountingSpecialService() || !this.accountingSaleForm.service_id) return 0;
+    const price =
+      this.services.find((service) => service.id === this.accountingSaleForm.service_id)?.price || 0;
+    return Math.max(0, Number(this.accountingSaleForm.amount || 0) - price);
+  }
+
+  saleTip(sale: Sale): number {
+    const tip = Number(sale.tip_amount || 0);
+    return tip > 0 && tip <= Number(sale.amount || 0) ? tip : 0;
+  }
+
+  saleBase(sale: Sale): number {
+    return Number(sale.amount || 0) - this.saleTip(sale);
   }
 
   setPayment(method: PaymentMethod): void {
@@ -1220,12 +1250,30 @@ export class App implements OnInit, OnDestroy {
     return this.accountingConfirmedSales().filter((sale) => sale.barber_id === barberId).length;
   }
 
+  accountingBarberTip(barberId: string): number {
+    return this.accountingConfirmedSales()
+      .filter((sale) => sale.barber_id === barberId)
+      .reduce((total, sale) => total + this.saleTip(sale), 0);
+  }
+
+  accountingBarberBaseTotal(barberId: string): number {
+    return this.accountingConfirmedSales()
+      .filter((sale) => sale.barber_id === barberId)
+      .reduce((total, sale) => total + this.saleBase(sale), 0);
+  }
+
   accountingBarberCommission(barberId: string): number {
-    return Math.round(this.accountingBarberTotal(barberId) * this.barberCommissionRate(barberId));
+    return (
+      Math.round(this.accountingBarberBaseTotal(barberId) * this.barberCommissionRate(barberId)) +
+      this.accountingBarberTip(barberId)
+    );
   }
 
   accountingBarberShopShare(barberId: string): number {
-    return this.accountingBarberTotal(barberId) - this.accountingBarberCommission(barberId);
+    const baseCommission = Math.round(
+      this.accountingBarberBaseTotal(barberId) * this.barberCommissionRate(barberId),
+    );
+    return this.accountingBarberBaseTotal(barberId) - baseCommission;
   }
 
   accountingPayrollTotal(): number {
@@ -1266,11 +1314,15 @@ export class App implements OnInit, OnDestroy {
   }
 
   closureBarberCommission(barber: ClosureBarber): number {
-    return Math.round(barber.total * this.closureBarberRate(barber));
+    const tip = Number(barber.tip_total || 0);
+    const base = Number(barber.base_total ?? barber.total - tip);
+    return Math.round(base * this.closureBarberRate(barber)) + tip;
   }
 
   closureBarberShopShare(barber: ClosureBarber): number {
-    return barber.total - this.closureBarberCommission(barber);
+    const tip = Number(barber.tip_total || 0);
+    const base = Number(barber.base_total ?? barber.total - tip);
+    return base - Math.round(base * this.closureBarberRate(barber));
   }
 
   selectExaminedClosure(closure: Closure): void {
@@ -1454,7 +1506,10 @@ export class App implements OnInit, OnDestroy {
   }
 
   barberCommission(barberId: string): number {
-    return Math.round(this.barberTotal(barberId) * this.barberCommissionRate(barberId));
+    const sales = this.confirmedSales().filter((sale) => sale.barber_id === barberId);
+    const tips = sales.reduce((total, sale) => total + this.saleTip(sale), 0);
+    const base = sales.reduce((total, sale) => total + this.saleBase(sale), 0);
+    return Math.round(base * this.barberCommissionRate(barberId)) + tips;
   }
 
   barberCommissionRate(barberId: string): number {

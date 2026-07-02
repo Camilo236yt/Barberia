@@ -352,6 +352,19 @@ def barber_commission_rate(barber):
     return rate if 0 < rate <= 1 else default_rate
 
 
+def sale_tip_amount(sale):
+    try:
+        amount = int(sale.get("amount", 0) or 0)
+        tip = int(sale.get("tip_amount", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return tip if 0 <= tip <= amount else 0
+
+
+def sale_base_amount(sale):
+    return int(sale.get("amount", 0) or 0) - sale_tip_amount(sale)
+
+
 def closure_snapshot(db, date_key, counted_cash, branch):
     sales = [
         sale
@@ -373,17 +386,22 @@ def closure_snapshot(db, date_key, counted_cash, branch):
             continue
         barber_sales = [sale for sale in confirmed if sale.get("barber_id") == barber["id"]]
         total = sum(sale["amount"] for sale in barber_sales)
+        tip_total = sum(sale_tip_amount(sale) for sale in barber_sales)
+        base_total = sum(sale_base_amount(sale) for sale in barber_sales)
         barber_rate = barber_commission_rate(barber)
-        commission = int(round(total * barber_rate))
+        base_commission = int(round(base_total * barber_rate))
+        commission = base_commission + tip_total
         barber_totals.append(
             {
                 "barber_id": barber["id"],
                 "barber_name": barber["name"],
                 "sales_count": len(barber_sales),
                 "total": total,
+                "base_total": base_total,
+                "tip_total": tip_total,
                 "commission_rate": barber_rate,
                 "commission": commission,
-                "shop_share": total - commission,
+                "shop_share": base_total - base_commission,
             }
         )
 
@@ -466,16 +484,21 @@ def refresh_closure_summary(db, date_key, branch):
                 barber_sales[0].get("barber_name") if barber_sales else "Barbero"
             )
         total = sum(sale["amount"] for sale in barber_sales)
-        commission = int(round(total * rate))
+        tip_total = sum(sale_tip_amount(sale) for sale in barber_sales)
+        base_total = sum(sale_base_amount(sale) for sale in barber_sales)
+        base_commission = int(round(base_total * rate))
+        commission = base_commission + tip_total
         barber_totals.append(
             {
                 "barber_id": barber_id,
                 "barber_name": name,
                 "sales_count": len(barber_sales),
                 "total": total,
+                "base_total": base_total,
+                "tip_total": tip_total,
                 "commission_rate": rate,
                 "commission": commission,
-                "shop_share": total - commission,
+                "shop_share": base_total - base_commission,
             }
         )
 
@@ -1438,12 +1461,18 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             if custom_service_name:
                 service_id = "especial"
                 service_name = validated_name(custom_service_name, "servicio especial")
+                listed_price = None
+                base_amount = amount
+                tip_amount = 0
             else:
                 service = find_by_id(db["services"], payload.get("service_id"))
                 if not service or service.get("branch_id") != branch["id"]:
                     raise ValueError("Servicio no encontrado.")
                 service_id = service["id"]
                 service_name = service["name"]
+                listed_price = int(service["price"])
+                tip_amount = max(0, amount - listed_price)
+                base_amount = amount - tip_amount
 
             sale_id = uuid.uuid4().hex[:12]
             proof_url = None
@@ -1462,6 +1491,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 "service_id": service_id,
                 "service_name": service_name,
                 "amount": amount,
+                "base_amount": base_amount,
+                "listed_price": listed_price,
+                "tip_amount": tip_amount,
                 "payment_method": payment_method,
                 "proof_url": proof_url,
                 "proof_note": (payload.get("proof_note") or "").strip(),
@@ -1508,12 +1540,26 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             if payment_method == "nequi" and not sale.get("proof_url"):
                 raise ValueError("No puedes cambiar a Nequi una venta que no tiene comprobante.")
 
+            listed_price = sale.get("listed_price")
+            if listed_price is None and sale.get("service_id") != "especial":
+                service = find_by_id(db["services"], sale.get("service_id"))
+                if service and service.get("branch_id") == branch_id:
+                    listed_price = int(service["price"])
+            try:
+                listed_price = int(listed_price) if listed_price is not None else None
+            except (TypeError, ValueError):
+                listed_price = None
+            tip_amount = max(0, amount - listed_price) if listed_price else 0
+
             sale.update(
                 {
                     "barber_id": barber["id"] if barber else sale["barber_id"],
                     "barber_name": barber["name"] if barber else sale["barber_name"],
                     "service_name": service_name,
                     "amount": amount,
+                    "base_amount": amount - tip_amount,
+                    "listed_price": listed_price,
+                    "tip_amount": tip_amount,
                     "payment_method": payment_method,
                     "client_name": str(payload.get("client_name") or "").strip()[:80],
                     "proof_note": str(payload.get("proof_note") or "").strip()[:120],
