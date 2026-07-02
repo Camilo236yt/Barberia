@@ -1062,38 +1062,6 @@ th {
   font-size: 1.08rem;
 }
 
-.barber-nequi-list {
-  display: grid;
-  gap: 6px;
-  border: 1px solid #e1c6df;
-  border-radius: 8px;
-  background: #fff7ff;
-  padding: 9px;
-}
-
-.barber-nequi-list > strong {
-  color: var(--purple);
-  font-size: 0.76rem;
-}
-
-.barber-nequi-list > span {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.72rem;
-}
-
-.barber-nequi-list em {
-  color: var(--muted);
-  font-style: normal;
-}
-
-.barber-nequi-list b {
-  color: var(--red);
-  white-space: nowrap;
-}
-
 .cash-diff {
   border-radius: 8px;
   background: #f4f7fb;

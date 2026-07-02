@@ -624,19 +624,12 @@
                   <span class="status-pill">{{ commissionPercent(barber.id) }}% para él</span>
                 </div>
                 <div class="payout-breakdown">
-                  <div class="nequi-received"><span>Recibió por Nequi</span><strong>{{ formatMoney(accountingBarberNequi(barber.id)) }}</strong></div>
-                  <div class="nequi-shop-share"><span>Debe entregar a la barbería por esos Nequi</span><strong>{{ formatMoney(accountingBarberNequiShopShare(barber.id)) }}</strong></div>
+                  <div class="nequi-received"><span>Total recibido por Nequi por {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberNequi(barber.id)) }}</strong></div>
+                  <div class="nequi-shop-share"><span>Descontar de ese Nequi para la barbería</span><strong>{{ formatMoney(accountingBarberNequiShopShare(barber.id)) }}</strong></div>
                   <div><span>Facturado</span><strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong></div>
                   <div class="tip-share"><span>Propina</span><strong>{{ formatMoney(accountingBarberTip(barber.id)) }}</strong></div>
                   <div><span>Ganancia de {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
                   <div><span>Para la barbería ({{ 100 - commissionPercent(barber.id) }}%)</span><strong>{{ formatMoney(accountingBarberShopShare(barber.id)) }}</strong></div>
-                </div>
-                <div class="barber-nequi-list" *ngIf="accountingBarberNequiSales(barber.id).length">
-                  <strong>Pagos Nequi descontados</strong>
-                  <span *ngFor="let sale of accountingBarberNequiSales(barber.id); trackBy: trackById">
-                    <em>{{ saleDay(sale) }} · {{ timeOnly(sale.created_at) }} · {{ sale.service_name }}</em>
-                    <b>− {{ formatMoney(sale.amount) }}</b>
-                  </span>
                 </div>
                 <small>{{ accountingBarberCount(barber.id) }} servicios confirmados</small>
               </article>
