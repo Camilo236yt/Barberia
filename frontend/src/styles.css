@@ -2056,6 +2056,77 @@ body {
   font-weight: 850;
 }
 
+.selected-accounting-day > div {
+  display: grid;
+  gap: 2px;
+}
+
+.accounting-add-sale-button {
+  width: auto;
+}
+
+.accounting-sale-form {
+  margin-bottom: 14px;
+}
+
+.accounting-sale-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.accounting-proof-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fafafa;
+  padding: 12px;
+}
+
+.accounting-proof-panel .file-button {
+  width: auto;
+}
+
+.accounting-proof-panel img {
+  width: 76px;
+  height: 76px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.accounting-sale-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.accounting-sale-form-actions .primary-button {
+  width: auto;
+}
+
+@media (max-width: 760px) {
+  .selected-accounting-day {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .accounting-add-sale-button,
+  .accounting-sale-form-actions .primary-button,
+  .accounting-sale-form-actions .secondary-button {
+    width: 100%;
+  }
+
+  .accounting-sale-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounting-sale-form-actions {
+    flex-direction: column;
+  }
+}
+
 .full-span {
   grid-column: 1 / -1;
 }

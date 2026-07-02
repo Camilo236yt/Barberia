@@ -55,20 +55,20 @@ DEFAULT_DB = {
         {"id": "juan", "name": "Juan", "active": True, "branch_id": "barberia-2", "commission_rate": 0.5},
     ],
     "services": [
-        {"id": "tijeras", "name": "Corte con tijeras", "price": 25000, "branch_id": "barberia-1"},
-        {"id": "basico", "name": "Corte básico", "price": 23000, "branch_id": "barberia-1"},
+        {"id": "tijeras", "name": "Corte con tijeras", "price": 30000, "branch_id": "barberia-1"},
+        {"id": "basico", "name": "Corte básico", "price": 25000, "branch_id": "barberia-1"},
         {"id": "barba", "name": "Barba", "price": 15000, "branch_id": "barberia-1"},
-        {"id": "combo", "name": "Corte y barba", "price": 35000, "branch_id": "barberia-1"},
+        {"id": "combo", "name": "Corte y barba", "price": 40000, "branch_id": "barberia-1"},
         {
             "id": "combo-tijeras",
             "name": "Corte con tijeras y barba",
             "price": 40000,
             "branch_id": "barberia-1",
         },
-        {"id": "tijeras-b2", "name": "Corte con tijeras", "price": 25000, "branch_id": "barberia-2"},
-        {"id": "basico-b2", "name": "Corte básico", "price": 23000, "branch_id": "barberia-2"},
+        {"id": "tijeras-b2", "name": "Corte con tijeras", "price": 30000, "branch_id": "barberia-2"},
+        {"id": "basico-b2", "name": "Corte básico", "price": 25000, "branch_id": "barberia-2"},
         {"id": "barba-b2", "name": "Barba", "price": 15000, "branch_id": "barberia-2"},
-        {"id": "combo-b2", "name": "Corte y barba", "price": 35000, "branch_id": "barberia-2"},
+        {"id": "combo-b2", "name": "Corte y barba", "price": 40000, "branch_id": "barberia-2"},
         {
             "id": "combo-tijeras-b2",
             "name": "Corte con tijeras y barba",
@@ -82,7 +82,7 @@ DEFAULT_DB = {
         "commission_rate": 0.5,
         "currency": "COP",
         "business_whatsapp_country_code": "57",
-        "catalog_version": 2,
+        "catalog_version": 3,
     },
 }
 
@@ -165,6 +165,25 @@ def read_db():
         data["barbers"] = [dict(barber) for barber in DEFAULT_DB["barbers"]]
         data["services"] = [dict(service) for service in DEFAULT_DB["services"]]
         data["settings"]["catalog_version"] = 2
+        changed = True
+
+    if previous_catalog_version < 3:
+        updated_prices = {
+            "tijeras": 30000,
+            "basico": 25000,
+            "barba": 15000,
+            "combo": 40000,
+            "combo-tijeras": 40000,
+            "tijeras-b2": 30000,
+            "basico-b2": 25000,
+            "barba-b2": 15000,
+            "combo-b2": 40000,
+            "combo-tijeras-b2": 40000,
+        }
+        for service in data["services"]:
+            if service.get("id") in updated_prices:
+                service["price"] = updated_prices[service["id"]]
+        data["settings"]["catalog_version"] = 3
         changed = True
 
     for collection_name in ["barbers", "services"]:
@@ -1346,6 +1365,17 @@ class BarberiaHandler(BaseHTTPRequestHandler):
         if not amount:
             raise ValueError("El valor cobrado debe ser mayor a cero.")
 
+        sale_date = str(payload.get("sale_date") or today_key()).strip()
+        try:
+            parsed_sale_date = dt.date.fromisoformat(sale_date)
+        except ValueError:
+            raise ValueError("Selecciona una fecha valida para la venta.")
+        if parsed_sale_date > dt.date.today():
+            raise ValueError("No puedes facturar una fecha futura.")
+        sale_time = str(payload.get("sale_time") or dt.datetime.now().strftime("%H:%M")).strip()
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", sale_time):
+            raise ValueError("Selecciona una hora valida para la venta.")
+
         with LOCK:
             db = read_db()
             branch = find_by_id(db["branches"], payload.get("branch_id"))
@@ -1353,7 +1383,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 raise ValueError("Selecciona una barberia valida.")
             if branch["id"] != self.headers.get("X-Branch-Id"):
                 raise ValueError("No puedes facturar en una barberia diferente a la de este acceso.")
-            if is_day_closed(db, branch["id"]):
+            if sale_date == today_key() and is_day_closed(db, branch["id"], sale_date):
                 raise ValueError("La caja de esta barberia ya esta cerrada.")
 
             barber = find_by_id(db["barbers"], payload.get("barber_id"))
@@ -1380,7 +1410,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
 
             sale = {
                 "id": sale_id,
-                "created_at": now_iso(),
+                "created_at": f"{sale_date}T{sale_time}:00",
                 "branch_id": branch["id"],
                 "branch_name": branch["name"],
                 "barber_id": barber["id"],
@@ -1395,7 +1425,13 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 "status": "confirmed" if payment_method == "cash" else "pending_review",
             }
             db["sales"].insert(0, sale)
+            refresh_closure_summary(db, sale_date, branch)
             write_db(db)
+            if find_closure(db, sale_date, branch["id"]) or (
+                HISTORY_ARCHIVE_DIR / f"{sale_date}.zip"
+            ).exists():
+                write_history_archive(db, sale_date)
+                queue_history_backup(sale_date)
             publish_data_change()
             self.send_json({"sale": sale}, 201)
 
@@ -1488,16 +1524,25 @@ class BarberiaHandler(BaseHTTPRequestHandler):
 
         with LOCK:
             db = read_db()
-            sale = find_by_id(db["sales"], sale_id)
+            sale = materialize_archived_sale(db, sale_id)
             if not sale:
                 self.send_json({"error": "Venta no encontrada."}, 404)
                 return
-            if sale.get("branch_id") != self.headers.get("X-Branch-Id"):
+            branch_id = self.headers.get("X-Branch-Id")
+            if sale.get("branch_id") != branch_id:
                 self.send_json({"error": "Esta venta pertenece a otra barberia."}, 403)
                 return
             sale["status"] = status
             sale["reviewed_at"] = now_iso()
+            date_key = item_day(sale)
+            branch = find_by_id(db["branches"], branch_id)
+            refresh_closure_summary(db, date_key, branch)
             write_db(db)
+            if find_closure(db, date_key, branch_id) or (
+                HISTORY_ARCHIVE_DIR / f"{date_key}.zip"
+            ).exists():
+                write_history_archive(db, date_key)
+                queue_history_backup(date_key)
             publish_data_change()
             self.send_json({"sale": sale})
 

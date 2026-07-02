@@ -393,9 +393,89 @@
         </section>
 
         <div class="selected-accounting-day">
-          <span>Movimientos del día</span>
-          <strong>{{ accountingDate }}</strong>
+          <div>
+            <span>Movimientos del día</span>
+            <strong>{{ accountingDate }}</strong>
+          </div>
+          <button class="primary-button accounting-add-sale-button" type="button" (click)="openAccountingSaleForm()">
+            + Agregar corte a esta fecha
+          </button>
         </div>
+
+        <form class="tool-panel accounting-sale-form" *ngIf="accountingSaleFormOpen" (ngSubmit)="submitAccountingSale()">
+          <div class="panel-heading">
+            <div>
+              <p>Facturación de fecha seleccionada</p>
+              <h2>Nuevo corte · {{ accountingDate }}</h2>
+            </div>
+            <button class="small-button" type="button" (click)="closeAccountingSaleForm()">Cerrar</button>
+          </div>
+          <div class="accounting-sale-form-grid">
+            <label class="field">
+              <span>Barbero</span>
+              <select name="accountingSaleBarber" [(ngModel)]="accountingSaleForm.barber_id" required>
+                <option *ngFor="let barber of barbers; trackBy: trackById" [value]="barber.id">{{ barber.name }}</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Servicio</span>
+              <select
+                name="accountingSaleService"
+                [(ngModel)]="accountingSaleForm.service_id"
+                (ngModelChange)="selectAccountingService($event)"
+                required
+              >
+                <option *ngFor="let service of services; trackBy: trackById" [value]="service.id">
+                  {{ service.name }} · {{ formatMoney(service.price) }}
+                </option>
+                <option value="especial">Servicio especial</option>
+              </select>
+            </label>
+            <label class="field" *ngIf="accountingSpecialService()">
+              <span>Nombre del servicio especial</span>
+              <input name="accountingCustomService" type="text" minlength="2" maxlength="60" [(ngModel)]="accountingCustomServiceName" required>
+            </label>
+            <label class="field">
+              <span>Valor cobrado</span>
+              <input name="accountingSaleAmount" type="number" min="1" step="1000" [(ngModel)]="accountingSaleForm.amount" required>
+            </label>
+            <label class="field">
+              <span>Hora del corte</span>
+              <input name="accountingSaleTime" type="time" [(ngModel)]="accountingSaleForm.sale_time" required>
+            </label>
+            <label class="field">
+              <span>Método de pago</span>
+              <select name="accountingSalePayment" [(ngModel)]="accountingSaleForm.payment_method" required>
+                <option value="cash">Efectivo</option>
+                <option value="nequi">Nequi</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Cliente (opcional)</span>
+              <input name="accountingSaleClient" type="text" maxlength="80" [(ngModel)]="accountingSaleForm.client_name">
+            </label>
+            <label class="field">
+              <span>Referencia (opcional)</span>
+              <input name="accountingSaleProofNote" type="text" maxlength="120" [(ngModel)]="accountingSaleForm.proof_note">
+            </label>
+          </div>
+          <div class="accounting-proof-panel" *ngIf="accountingSaleForm.payment_method === 'nequi'">
+            <label class="secondary-button file-button">
+              Subir comprobante
+              <input class="file-input" type="file" accept="image/*" (change)="handleAccountingProofFile($event)">
+            </label>
+            <img *ngIf="accountingProofPreviewUrl" [src]="accountingProofPreviewUrl" alt="Comprobante Nequi">
+          </div>
+          <div class="accounting-sale-form-actions">
+            <button class="primary-button" type="submit" [disabled]="accountingSaleSaving">
+              {{ accountingSaleSaving ? 'Guardando...' : 'Confirmar corte en ' + accountingDate }}
+            </button>
+            <button class="secondary-button" type="button" [disabled]="accountingSaleSaving" (click)="closeAccountingSaleForm()">Cancelar</button>
+          </div>
+          <p class="form-message" [class.success]="accountingSaleMessageType === 'success'" [class.error]="accountingSaleMessageType === 'error'">
+            {{ accountingSaleMessage }}
+          </p>
+        </form>
 
         <div class="kpi-row">
           <article class="kpi-card"><span>Total confirmado</span><strong>{{ formatMoney(accountingTotal()) }}</strong><small>{{ accountingDate }}</small></article>

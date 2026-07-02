@@ -180,6 +180,22 @@ export class App implements OnInit, OnDestroy {
   examinedBranchId = '';
   accountingDate = this.todayKey();
   accountingMonthKey = this.todayKey().slice(0, 7);
+  accountingSaleFormOpen = false;
+  accountingSaleSaving = false;
+  accountingSaleMessage = '';
+  accountingSaleMessageType: 'success' | 'error' | '' = '';
+  accountingProofDataUrl = '';
+  accountingProofPreviewUrl = '';
+  accountingCustomServiceName = '';
+  accountingSaleForm = {
+    barber_id: '',
+    service_id: '',
+    amount: 0,
+    payment_method: 'cash' as PaymentMethod,
+    client_name: '',
+    proof_note: '',
+    sale_time: '',
+  };
   historyMonthKey = this.todayKey().slice(0, 7);
   localHistoryMonths: string[] = [];
   remoteHistoryMonths: string[] = [];
@@ -398,6 +414,17 @@ export class App implements OnInit, OnDestroy {
     if (!this.isSpecialService && !this.services.some((service) => service.id === this.selectedServiceId)) {
       this.selectedServiceId = '';
       if (this.services.length) this.selectService(this.services[0]);
+    }
+    if (!this.barbers.some((barber) => barber.id === this.accountingSaleForm.barber_id)) {
+      this.accountingSaleForm.barber_id = this.barbers[0]?.id || '';
+    }
+    if (
+      this.accountingSaleForm.service_id !== 'especial' &&
+      !this.services.some((service) => service.id === this.accountingSaleForm.service_id)
+    ) {
+      const firstService = this.services[0];
+      this.accountingSaleForm.service_id = firstService?.id || '';
+      this.accountingSaleForm.amount = firstService?.price || 0;
     }
   }
 
@@ -1005,6 +1032,123 @@ export class App implements OnInit, OnDestroy {
 
   selectAccountingDate(dateKey: string): void {
     this.accountingDate = dateKey;
+    this.accountingSaleFormOpen = false;
+    this.accountingSaleMessage = '';
+  }
+
+  openAccountingSaleForm(): void {
+    this.accountingSaleFormOpen = true;
+    this.accountingSaleMessage = '';
+    if (!this.accountingSaleForm.sale_time) {
+      const now = new Date();
+      this.accountingSaleForm.sale_time =
+        `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+    this.ensureDefaults();
+  }
+
+  closeAccountingSaleForm(): void {
+    this.accountingSaleFormOpen = false;
+    this.accountingSaleMessage = '';
+  }
+
+  selectAccountingService(serviceId: string): void {
+    this.accountingSaleForm.service_id = serviceId;
+    this.accountingCustomServiceName = '';
+    const service = this.services.find((item) => item.id === serviceId);
+    this.accountingSaleForm.amount = service?.price || 0;
+  }
+
+  accountingSpecialService(): boolean {
+    return this.accountingSaleForm.service_id === 'especial';
+  }
+
+  async handleAccountingProofFile(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      this.accountingSaleMessage = 'Selecciona una imagen.';
+      this.accountingSaleMessageType = 'error';
+      input.value = '';
+      return;
+    }
+    try {
+      const dataUrl = await this.readImage(file);
+      this.accountingProofDataUrl = dataUrl;
+      this.accountingProofPreviewUrl = dataUrl;
+    } catch (error) {
+      this.accountingSaleMessage = this.errorMessage(error);
+      this.accountingSaleMessageType = 'error';
+    } finally {
+      input.value = '';
+      this.renderNow();
+    }
+  }
+
+  async submitAccountingSale(): Promise<void> {
+    if (this.accountingSaleSaving) return;
+    if (!this.accountingSaleForm.barber_id || !this.accountingSaleForm.service_id) {
+      this.accountingSaleMessage = 'Selecciona el barbero y el servicio.';
+      this.accountingSaleMessageType = 'error';
+      return;
+    }
+    if (this.accountingSpecialService() && this.accountingCustomServiceName.trim().length < 2) {
+      this.accountingSaleMessage = 'Escribe el nombre del servicio especial.';
+      this.accountingSaleMessageType = 'error';
+      return;
+    }
+    if (Number(this.accountingSaleForm.amount) <= 0) {
+      this.accountingSaleMessage = 'El valor cobrado debe ser mayor a cero.';
+      this.accountingSaleMessageType = 'error';
+      return;
+    }
+    if (
+      this.accountingSaleForm.payment_method === 'nequi' &&
+      !this.accountingProofDataUrl
+    ) {
+      this.accountingSaleMessage = 'Sube el comprobante de Nequi.';
+      this.accountingSaleMessageType = 'error';
+      return;
+    }
+
+    this.accountingSaleSaving = true;
+    try {
+      await this.api('/api/sales', {
+        method: 'POST',
+        body: JSON.stringify({
+          branch_id: this.activeBranchId,
+          barber_id: this.accountingSaleForm.barber_id,
+          service_id: this.accountingSpecialService()
+            ? ''
+            : this.accountingSaleForm.service_id,
+          custom_service_name: this.accountingSpecialService()
+            ? this.accountingCustomServiceName.trim()
+            : '',
+          amount: Number(this.accountingSaleForm.amount),
+          payment_method: this.accountingSaleForm.payment_method,
+          proof_image: this.accountingProofDataUrl,
+          proof_note: this.accountingSaleForm.proof_note,
+          client_name: this.accountingSaleForm.client_name,
+          sale_date: this.accountingDate,
+          sale_time: this.accountingSaleForm.sale_time,
+        }),
+      });
+      this.accountingSaleForm.client_name = '';
+      this.accountingSaleForm.proof_note = '';
+      this.accountingProofDataUrl = '';
+      this.accountingProofPreviewUrl = '';
+      this.accountingCustomServiceName = '';
+      this.accountingSaleMessage = `Corte agregado a la facturación del ${this.accountingDate}.`;
+      this.accountingSaleMessageType = 'success';
+      await this.loadData(true);
+    } catch (error) {
+      this.accountingSaleMessage = this.errorMessage(error);
+      this.accountingSaleMessageType = 'error';
+    } finally {
+      this.accountingSaleSaving = false;
+      this.renderNow();
+    }
   }
 
   changeAccountingMonth(offset: number): void {
