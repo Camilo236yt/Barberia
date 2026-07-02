@@ -190,6 +190,7 @@ try {
       "/*" `
       "!/data/" `
       "!/tools/node/" `
+      "!/tools/python/" `
       "!/tools/cloudflared/" `
       "!/tools/cloudflare-worker/" `
       "!/tools/backups/" `
@@ -223,7 +224,7 @@ try {
   if (-not $NoLaunch) {
     Write-Install "Iniciando el servidor..."
     Start-Process -FilePath (Join-Path $InstallPath "Iniciar Barberia.cmd") `
-      -ArgumentList @("-NoBrowser") `
+      -ArgumentList @("-NoBrowser", "-SkipUpdateCheck") `
       -WorkingDirectory $InstallPath
     $serverReady = $false
     for ($attempt = 0; $attempt -lt 40; $attempt++) {

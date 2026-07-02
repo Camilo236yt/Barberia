@@ -122,6 +122,7 @@ Entrega al cliente `Instalar Barberia.cmd` junto con `Instalar Barberia.ps1`. El
 - No descarga la rama `historial-datos` ni los meses anteriores.
 - Instala el programa en `%LOCALAPPDATA%\CapitanGold\Barberia`.
 - Instala Python portátil y ngrok desde sus fuentes oficiales.
+- Conserva esas dependencias durante las actualizaciones y recupera Python automáticamente si falta.
 - Usa Git instalado o instala Git for Windows oficial con acceso seguro a GitHub cuando no está disponible.
 - No crea accesos directos y elimina los antiguos creados por versiones anteriores.
 - Al finalizar inicia el servidor y abre el panel en el navegador predeterminado.

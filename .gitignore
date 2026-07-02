@@ -12,6 +12,8 @@ __pycache__/
 frontend/node_modules/
 frontend/.angular/
 tools/node/
+tools/python/
+tools/ngrok/ngrok.exe
 tools/cloudflared/
 tools/cloudflare-worker/node_modules/
 

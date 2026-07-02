@@ -28,6 +28,11 @@ $RuntimePaths = @(
   "__pycache__"
 )
 
+$LocalDependencyPaths = @(
+  "tools/python",
+  "tools/ngrok/ngrok.exe"
+)
+
 $UpdateStateRoot = Join-Path $env:LOCALAPPDATA "CapitanGold\updates"
 $appRootBytes = [System.Text.Encoding]::UTF8.GetBytes($AppRoot.ToLowerInvariant())
 $appRootHash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($appRootBytes)
@@ -71,7 +76,7 @@ function Test-RuntimePath($Path) {
   if ($normalized.Contains(" -> ")) {
     $normalized = ($normalized -split " -> ")[-1]
   }
-  foreach ($runtimePath in $RuntimePaths) {
+  foreach ($runtimePath in @($RuntimePaths + $LocalDependencyPaths)) {
     $runtimeNormalized = $runtimePath.Replace("\", "/")
     if ($normalized -eq $runtimeNormalized -or $normalized.StartsWith("$runtimeNormalized/")) {
       return $true
@@ -176,6 +181,7 @@ function Set-LightweightSparseCheckout {
     "/*",
     "!/data/",
     "!/tools/node/",
+    "!/tools/python/",
     "!/tools/cloudflared/",
     "!/tools/cloudflare-worker/",
     "!/tools/backups/",
@@ -435,6 +441,7 @@ La contabilidad, imagenes y configuracion local se conservaran. Los archivos mod
       "-e", "data/",
       "-e", "LINK_ADMIN_ONLINE.txt",
       "-e", "tools/logs/",
+      "-e", "tools/python/",
       "-e", "tools/ngrok/ngrok.exe",
       "-e", "tools/ngrok/authtoken.txt",
       "-e", "tools/ngrok/public-url.txt",

@@ -15,6 +15,8 @@ $NgrokTokenPath = Join-Path $AppRoot "tools\ngrok\authtoken.txt"
 $NgrokPublicUrlPath = Join-Path $AppRoot "tools\ngrok\public-url.txt"
 $OnlineTokenPath = Join-Path $AppRoot "data\admin-online-token.txt"
 $OnlineLinkPath = Join-Path $AppRoot "LINK_ADMIN_ONLINE.txt"
+$PythonVersion = "3.13.14"
+$PythonSha256 = "90b4e5b9898b72d744650524bff92377c367f44bd5fbd09e3148656c080ad907"
 
 function Write-Step($Message) {
   Write-Host "[Barberia] $Message"
@@ -32,8 +34,39 @@ function Invoke-UpdateCheck {
   & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "`"$updater`"" -AppRoot "`"$AppRoot`""
 }
 
+function Install-PortablePythonIfMissing {
+  $pythonDirectory = Join-Path $AppRoot "tools\python"
+  $pythonExe = Join-Path $pythonDirectory "python.exe"
+  if (Test-Path -LiteralPath $pythonExe) {
+    return
+  }
+
+  Write-Step "Python portatil no esta disponible. Recuperandolo automaticamente..."
+  $downloadPath = Join-Path $env:TEMP "capitan-gold-python.zip"
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest `
+      -Uri "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-embed-amd64.zip" `
+      -OutFile $downloadPath `
+      -UseBasicParsing
+    $actualHash = (Get-FileHash -LiteralPath $downloadPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualHash -ne $PythonSha256) {
+      throw "La firma de seguridad del paquete de Python no coincide."
+    }
+    New-Item -ItemType Directory -Path $pythonDirectory -Force | Out-Null
+    Expand-Archive -LiteralPath $downloadPath -DestinationPath $pythonDirectory -Force
+  } finally {
+    Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
+  }
+}
+
 function Find-Python {
   $portablePython = Join-Path $AppRoot "tools\python\python.exe"
+  try {
+    Install-PortablePythonIfMissing
+  } catch {
+    Write-Step "No se pudo recuperar Python portatil: $($_.Exception.Message)"
+  }
   if (Test-Path -LiteralPath $portablePython) {
     try {
       & $portablePython -c "import sys; print(sys.version)" | Out-Null
