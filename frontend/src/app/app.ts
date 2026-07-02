@@ -107,6 +107,8 @@ interface AdminOptionsResponse {
   role: 'local' | 'online';
   selected_branch_id: string | null;
   occupied_branch_id: string | null;
+  connected_devices?: number;
+  max_devices?: number;
   branches: Branch[];
 }
 
@@ -168,6 +170,8 @@ export class App implements OnInit, OnDestroy {
   branchPickerOpen = true;
   accessLoading = true;
   accessError = '';
+  connectedAdminDevices = 0;
+  maxAdminDevices = 2;
 
   selectedServiceId = '';
   isSpecialService = false;
@@ -249,6 +253,7 @@ export class App implements OnInit, OnDestroy {
   private backupStatusBusy = false;
   private localSessionTimer?: number;
   private localSessionId = '';
+  private adminDeviceId = '';
   private eventSource?: EventSource;
   private messageTimers: number[] = [];
   private destroyed = false;
@@ -259,6 +264,7 @@ export class App implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.detectPortalMode();
+    this.adminDeviceId = this.getAdminDeviceId();
     this.startLocalSession();
     this.loadAdminOptions();
     this.connectRealtime();
@@ -341,6 +347,8 @@ export class App implements OnInit, OnDestroy {
       const options = await this.api<AdminOptionsResponse>('/api/admin/options');
       this.adminRole = options.role;
       this.availableBranches = options.branches || [];
+      this.connectedAdminDevices = options.connected_devices || 1;
+      this.maxAdminDevices = options.max_devices || 2;
       this.accessError = '';
       if (options.selected_branch_id && !keepPickerOpen) {
         this.activeBranchId = options.selected_branch_id;
@@ -598,7 +606,9 @@ export class App implements OnInit, OnDestroy {
 
   connectRealtime(): void {
     if (!('EventSource' in window)) return;
-    this.eventSource = new EventSource('/api/events');
+    const params = new URLSearchParams({ device_id: this.adminDeviceId });
+    if (this.adminToken) params.set('token', this.adminToken);
+    this.eventSource = new EventSource(`/api/events?${params.toString()}`);
     this.eventSource.addEventListener('open', () => {
       this.realtimeConnected = true;
       this.renderNow();
@@ -1550,6 +1560,7 @@ export class App implements OnInit, OnDestroy {
         'Content-Type': 'application/json',
         'X-Branch-Id': this.activeBranchId,
         'X-Admin-Token': this.adminToken,
+        'X-Device-Id': this.adminDeviceId,
         ...(options.headers || {}),
       },
       ...options,
@@ -1557,6 +1568,32 @@ export class App implements OnInit, OnDestroy {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'No se pudo completar la acción.');
     return data as T;
+  }
+
+  private getAdminDeviceId(): string {
+    const storageKey = 'capitan-gold-admin-device-id';
+    const isValid = (value: string | null): value is string =>
+      Boolean(value && /^[A-Za-z0-9-]{8,80}$/.test(value));
+    const create = () =>
+      window.crypto?.randomUUID?.() ||
+      `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (isValid(saved)) return saved;
+      const created = create();
+      window.localStorage.setItem(storageKey, created);
+      return created;
+    } catch {
+      try {
+        const saved = window.sessionStorage.getItem(storageKey);
+        if (isValid(saved)) return saved;
+        const created = create();
+        window.sessionStorage.setItem(storageKey, created);
+        return created;
+      } catch {
+        return create();
+      }
+    }
   }
 
   private readImage(file: File): Promise<string> {

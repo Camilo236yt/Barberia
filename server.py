@@ -32,8 +32,11 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 LOCK = threading.Lock()
 EVENT_CONDITION = threading.Condition()
 DATA_VERSION = 0
-ADMIN_ASSIGNMENTS = {"local": None, "online": None}
+ADMIN_ASSIGNMENTS = {}
+ADMIN_DEVICE_SESSIONS = {}
 ADMIN_ASSIGNMENT_LOCK = threading.Lock()
+MAX_ADMIN_DEVICES = 2
+ADMIN_DEVICE_TIMEOUT_SECONDS = 90
 LOCAL_UI_SESSIONS = {}
 LOCAL_UI_SESSION_LOCK = threading.Lock()
 LOCAL_UI_MONITOR_ARMED = False
@@ -891,21 +894,60 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             return "online"
         return None
 
+    def admin_device_id(self):
+        parsed = urlparse(self.path)
+        query_device_id = (parse_qs(parsed.query).get("device_id") or [""])[0]
+        return (self.headers.get("X-Device-Id") or query_device_id).strip()
+
+    def authorize_admin_device(self, role):
+        device_id = self.admin_device_id()
+        if not re.fullmatch(r"[A-Za-z0-9-]{8,80}", device_id):
+            self.send_json({"error": "Este dispositivo no tiene una identificacion valida."}, 403)
+            return None
+
+        now = time.monotonic()
+        with ADMIN_ASSIGNMENT_LOCK:
+            expired = [
+                saved_id
+                for saved_id, session in ADMIN_DEVICE_SESSIONS.items()
+                if now - session.get("last_seen", now) >= ADMIN_DEVICE_TIMEOUT_SECONDS
+            ]
+            for expired_id in expired:
+                ADMIN_DEVICE_SESSIONS.pop(expired_id, None)
+                ADMIN_ASSIGNMENTS.pop(expired_id, None)
+
+            if device_id not in ADMIN_DEVICE_SESSIONS and len(ADMIN_DEVICE_SESSIONS) >= MAX_ADMIN_DEVICES:
+                self.send_json(
+                    {
+                        "error": (
+                            "Ya hay dos dispositivos administrativos conectados. "
+                            "Cierra uno o espera un momento para ingresar."
+                        )
+                    },
+                    403,
+                )
+                return None
+            ADMIN_DEVICE_SESSIONS[device_id] = {"role": role, "last_seen": now}
+        return device_id
+
     def require_admin_role(self):
         role = self.request_admin_role()
-        if role:
-            return role
-        self.send_json({"error": "El enlace administrativo online no es valido."}, 403)
-        self.close_connection = True
-        return None
+        if not role:
+            self.send_json({"error": "El enlace administrativo online no es valido."}, 403)
+            self.close_connection = True
+            return None
+        if not self.authorize_admin_device(role):
+            return None
+        return role
 
     def branch_scope(self, role):
         branch_id = (self.headers.get("X-Branch-Id") or "").strip()
         if branch_id not in {"barberia-1", "barberia-2"}:
             self.send_json({"error": "El acceso administrativo no tiene una barberia asignada."}, 403)
             return None
+        device_id = self.admin_device_id()
         with ADMIN_ASSIGNMENT_LOCK:
-            assigned_branch = ADMIN_ASSIGNMENTS.get(role)
+            assigned_branch = ADMIN_ASSIGNMENTS.get(device_id)
         if assigned_branch != branch_id:
             self.send_json({"error": "Esta sesion no tiene asignada esa barberia."}, 403)
             return None
@@ -914,20 +956,22 @@ class BarberiaHandler(BaseHTTPRequestHandler):
     def admin_options(self, role):
         with LOCK:
             db = read_db()
-        other_role = "online" if role == "local" else "local"
+        device_id = self.admin_device_id()
         with ADMIN_ASSIGNMENT_LOCK:
-            selected = ADMIN_ASSIGNMENTS.get(role)
-            occupied = ADMIN_ASSIGNMENTS.get(other_role)
+            selected = ADMIN_ASSIGNMENTS.get(device_id)
+            connected_devices = len(ADMIN_DEVICE_SESSIONS)
         branches = [
             branch
             for branch in db["branches"]
-            if branch.get("active", True) and branch.get("id") != occupied
+            if branch.get("active", True)
         ]
         self.send_json(
             {
                 "role": role,
                 "selected_branch_id": selected,
-                "occupied_branch_id": occupied,
+                "occupied_branch_id": None,
+                "connected_devices": connected_devices,
+                "max_devices": MAX_ADMIN_DEVICES,
                 "branches": branches,
             }
         )
@@ -941,11 +985,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
         if not branch or not branch.get("active", True):
             raise ValueError("Selecciona una barberia valida.")
 
-        other_role = "online" if role == "local" else "local"
+        device_id = self.admin_device_id()
         with ADMIN_ASSIGNMENT_LOCK:
-            if ADMIN_ASSIGNMENTS.get(other_role) == branch_id:
-                raise ValueError("La otra administracion ya esta usando esa barberia.")
-            ADMIN_ASSIGNMENTS[role] = branch_id
+            ADMIN_ASSIGNMENTS[device_id] = branch_id
         publish_data_change()
         self.send_json({"role": role, "branch": branch})
 
@@ -1010,7 +1052,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/events":
-            self.serve_events()
+            role = self.require_admin_role()
+            if role:
+                self.serve_events()
             return
 
         if path.startswith("/uploads/"):
