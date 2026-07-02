@@ -391,6 +391,9 @@ def closure_snapshot(db, date_key, counted_cash, branch):
         total = sum(sale["amount"] for sale in barber_sales)
         tip_total = sum(sale_tip_amount(sale) for sale in barber_sales)
         base_total = sum(sale_base_amount(sale) for sale in barber_sales)
+        nequi_total = sum(
+            sale["amount"] for sale in barber_sales if sale.get("payment_method") == "nequi"
+        )
         barber_rate = barber_commission_rate(barber)
         base_commission = int(round(base_total * barber_rate))
         commission = base_commission + tip_total
@@ -402,6 +405,7 @@ def closure_snapshot(db, date_key, counted_cash, branch):
                 "total": total,
                 "base_total": base_total,
                 "tip_total": tip_total,
+                "nequi_total": nequi_total,
                 "commission_rate": barber_rate,
                 "commission": commission,
                 "shop_share": base_total - base_commission,
@@ -489,6 +493,9 @@ def refresh_closure_summary(db, date_key, branch):
         total = sum(sale["amount"] for sale in barber_sales)
         tip_total = sum(sale_tip_amount(sale) for sale in barber_sales)
         base_total = sum(sale_base_amount(sale) for sale in barber_sales)
+        nequi_total = sum(
+            sale["amount"] for sale in barber_sales if sale.get("payment_method") == "nequi"
+        )
         base_commission = int(round(base_total * rate))
         commission = base_commission + tip_total
         barber_totals.append(
@@ -499,6 +506,7 @@ def refresh_closure_summary(db, date_key, branch):
                 "total": total,
                 "base_total": base_total,
                 "tip_total": tip_total,
+                "nequi_total": nequi_total,
                 "commission_rate": rate,
                 "commission": commission,
                 "shop_share": base_total - base_commission,
@@ -1078,6 +1086,10 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                             if closure.get("branch_id") == branch_id
                         ],
                         "settings": db["settings"],
+                        "capabilities": {
+                            "historical_sales": True,
+                            "strict_date_filtering": True,
+                        },
                     }
                 )
             return

@@ -1045,6 +1045,55 @@ th {
   color: #9a6d00;
 }
 
+.payout-breakdown .nequi-deduction strong,
+.payout-breakdown .settlement-negative strong {
+  color: var(--red);
+}
+
+.payout-breakdown .barber-share {
+  border: 1px solid #dcc58d;
+  border-radius: 7px;
+  background: #fff9e9;
+  padding: 9px;
+}
+
+.payout-breakdown .barber-share.settlement-negative {
+  border-color: #e3b1ad;
+  background: #fff2f1;
+}
+
+.barber-nequi-list {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e1c6df;
+  border-radius: 8px;
+  background: #fff7ff;
+  padding: 9px;
+}
+
+.barber-nequi-list > strong {
+  color: var(--purple);
+  font-size: 0.76rem;
+}
+
+.barber-nequi-list > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+}
+
+.barber-nequi-list em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.barber-nequi-list b {
+  color: var(--red);
+  white-space: nowrap;
+}
+
 .cash-diff {
   border-radius: 8px;
   background: #f4f7fb;

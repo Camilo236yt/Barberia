@@ -56,6 +56,7 @@ interface ClosureBarber {
   total: number;
   base_total?: number;
   tip_total?: number;
+  nequi_total?: number;
   commission: number;
   commission_rate?: number;
   shop_share?: number;
@@ -105,6 +106,10 @@ interface BootstrapResponse {
     commission_rate: number;
     currency: string;
     business_whatsapp_country_code: string;
+  };
+  capabilities?: {
+    historical_sales?: boolean;
+    strict_date_filtering?: boolean;
   };
 }
 
@@ -195,6 +200,7 @@ export class App implements OnInit, OnDestroy {
   accountingDate = this.todayKey();
   accountingMonthKey = this.todayKey().slice(0, 7);
   accountingSaleFormOpen = false;
+  supportsHistoricalSales = false;
   accountingSaleSaving = false;
   accountingSaleMessage = '';
   accountingSaleMessageType: 'success' | 'error' | '' = '';
@@ -441,6 +447,9 @@ export class App implements OnInit, OnDestroy {
       this.sales = data.sales || [];
       this.closures = data.closures || [];
       this.settings = data.settings || this.settings;
+      this.supportsHistoricalSales =
+        data.capabilities?.historical_sales === true &&
+        data.capabilities?.strict_date_filtering === true;
       this.ensureDefaults();
       const currentClosure = this.currentClosure();
       if (currentClosure?.status === 'closed') this.countedCash = currentClosure.counted_cash;
@@ -1136,6 +1145,11 @@ export class App implements OnInit, OnDestroy {
   openAccountingSaleForm(): void {
     this.accountingSaleFormOpen = true;
     this.accountingSaleMessage = '';
+    if (this.accountingDate !== this.todayKey() && !this.supportsHistoricalSales) {
+      this.accountingSaleMessage =
+        'El servidor abierto todavía no admite fechas anteriores. Reinicia el programa antes de registrar este día.';
+      this.accountingSaleMessageType = 'error';
+    }
     if (!this.accountingSaleForm.sale_time) {
       const now = new Date();
       this.accountingSaleForm.sale_time =
@@ -1185,6 +1199,12 @@ export class App implements OnInit, OnDestroy {
 
   async submitAccountingSale(): Promise<void> {
     if (this.accountingSaleSaving) return;
+    if (this.accountingDate !== this.todayKey() && !this.supportsHistoricalSales) {
+      this.accountingSaleMessage =
+        'No se guardó el corte: reinicia el programa para activar la separación correcta por fechas.';
+      this.accountingSaleMessageType = 'error';
+      return;
+    }
     if (!this.accountingSaleForm.barber_id || !this.accountingSaleForm.service_id) {
       this.accountingSaleMessage = 'Selecciona el barbero y el servicio.';
       this.accountingSaleMessageType = 'error';
@@ -1211,7 +1231,7 @@ export class App implements OnInit, OnDestroy {
 
     this.accountingSaleSaving = true;
     try {
-      await this.api('/api/sales', {
+      const result = await this.api<{ sale: Sale }>('/api/sales', {
         method: 'POST',
         body: JSON.stringify({
           branch_id: this.activeBranchId,
@@ -1231,6 +1251,11 @@ export class App implements OnInit, OnDestroy {
           sale_time: this.accountingSaleForm.sale_time,
         }),
       });
+      if (this.saleDay(result.sale) !== this.accountingDate) {
+        throw new Error(
+          `El servidor devolvió la fecha ${this.saleDay(result.sale)} en lugar de ${this.accountingDate}. Reinicia el programa antes de continuar.`,
+        );
+      }
       this.accountingSaleForm.client_name = '';
       this.accountingSaleForm.proof_note = '';
       this.accountingProofDataUrl = '';
@@ -1326,6 +1351,27 @@ export class App implements OnInit, OnDestroy {
     );
   }
 
+  accountingBarberNequi(barberId: string): number {
+    return this.accountingBarberNequiSales(barberId).reduce(
+      (total, sale) => total + Number(sale.amount || 0),
+      0,
+    );
+  }
+
+  accountingBarberNequiSales(barberId: string): Sale[] {
+    return this.accountingConfirmedSales().filter(
+      (sale) => sale.barber_id === barberId && sale.payment_method === 'nequi',
+    );
+  }
+
+  accountingBarberSettlement(barberId: string): number {
+    return this.accountingBarberCommission(barberId) - this.accountingBarberNequi(barberId);
+  }
+
+  accountingBarberSettlementAmount(barberId: string): number {
+    return Math.abs(this.accountingBarberSettlement(barberId));
+  }
+
   accountingBarberShopShare(barberId: string): number {
     const baseCommission = Math.round(
       this.accountingBarberBaseTotal(barberId) * this.barberCommissionRate(barberId),
@@ -1376,10 +1422,51 @@ export class App implements OnInit, OnDestroy {
     return Math.round(base * this.closureBarberRate(barber)) + tip;
   }
 
+  accountingNequiReceivedByBarbers(): number {
+    return this.barbers.reduce(
+      (total, barber) => total + this.accountingBarberNequi(barber.id),
+      0,
+    );
+  }
+
+  accountingCashToPay(): number {
+    return this.barbers.reduce(
+      (total, barber) => total + Math.max(0, this.accountingBarberSettlement(barber.id)),
+      0,
+    );
+  }
+
+  accountingCashToRecover(): number {
+    return this.barbers.reduce(
+      (total, barber) => total + Math.max(0, -this.accountingBarberSettlement(barber.id)),
+      0,
+    );
+  }
+
   closureBarberShopShare(barber: ClosureBarber): number {
     const tip = Number(barber.tip_total || 0);
     const base = Number(barber.base_total ?? barber.total - tip);
     return base - Math.round(base * this.closureBarberRate(barber));
+  }
+
+  closureBarberNequi(barber: ClosureBarber): number {
+    if (barber.nequi_total !== undefined) return Number(barber.nequi_total || 0);
+    return this.examinedSales()
+      .filter(
+        (sale) =>
+          sale.status === 'confirmed' &&
+          sale.barber_id === barber.barber_id &&
+          sale.payment_method === 'nequi',
+      )
+      .reduce((total, sale) => total + Number(sale.amount || 0), 0);
+  }
+
+  closureBarberSettlement(barber: ClosureBarber): number {
+    return this.closureBarberCommission(barber) - this.closureBarberNequi(barber);
+  }
+
+  closureBarberSettlementAmount(barber: ClosureBarber): number {
+    return Math.abs(this.closureBarberSettlement(barber));
   }
 
   selectExaminedClosure(closure: Closure): void {
