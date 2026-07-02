@@ -25,6 +25,7 @@ UPLOAD_DIR = DATA_DIR / "uploads"
 DB_PATH = DATA_DIR / "db.json"
 HISTORY_ARCHIVE_DIR = DATA_DIR / "history-archives"
 HISTORY_BACKUP_STATUS_PATH = DATA_DIR / "history-backup-status.json"
+HISTORY_UPLOAD_INDEX_PATH = DATA_DIR / "history-upload-index.json"
 HISTORY_BACKUP_SCRIPT = ROOT / "tools" / "backup-history.ps1"
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
@@ -409,7 +410,30 @@ def write_history_archive(db, date_key):
                 archive.write(source, f"uploads/{filename}")
                 included.add(filename)
     temp_target.replace(target)
+    mark_history_archive_pending(date_key)
     return target
+
+
+def read_history_upload_index():
+    if not HISTORY_UPLOAD_INDEX_PATH.exists():
+        return {}
+    try:
+        value = json.loads(HISTORY_UPLOAD_INDEX_PATH.read_text(encoding="utf-8-sig"))
+        return value if isinstance(value, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def mark_history_archive_pending(date_key):
+    uploaded = read_history_upload_index()
+    if date_key not in uploaded:
+        return
+    uploaded.pop(date_key, None)
+    temp_path = HISTORY_UPLOAD_INDEX_PATH.with_suffix(".tmp")
+    temp_path.write_text(
+        json.dumps(uploaded, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    temp_path.replace(HISTORY_UPLOAD_INDEX_PATH)
 
 
 def read_history_archive(path):
@@ -472,6 +496,15 @@ def prepare_existing_history_archives(db):
             write_history_archive(db, date_key)
             created_dates.append(date_key)
     return created_dates
+
+
+def pending_history_uploads():
+    uploaded = read_history_upload_index()
+    return sorted(
+        path.stem
+        for path in HISTORY_ARCHIVE_DIR.glob("????-??-??.zip")
+        if path.stem not in uploaded
+    )
 
 
 def run_history_backup(action, history_key="", timeout=120):
@@ -1269,7 +1302,8 @@ def main():
     ensure_storage()
     with LOCK:
         existing_db = read_db()
-        pending_history_dates = prepare_existing_history_archives(existing_db)
+        prepare_existing_history_archives(existing_db)
+        pending_history_dates = pending_history_uploads()
     for history_date in pending_history_dates:
         queue_history_backup(history_date)
     port = 8000

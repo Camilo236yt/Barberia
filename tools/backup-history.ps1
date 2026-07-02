@@ -21,6 +21,7 @@ $Remote = "origin"
 $RemoteRef = "refs/remotes/$Remote/$Branch"
 $ArchiveDirectory = Join-Path $AppRoot "data\history-archives"
 $StatusPath = Join-Path $AppRoot "data\history-backup-status.json"
+$UploadIndexPath = Join-Path $AppRoot "data\history-upload-index.json"
 $GitExe = (Get-Command git.exe -ErrorAction SilentlyContinue).Source
 if (-not $GitExe) {
   $GitExe = (Get-Command git -ErrorAction SilentlyContinue).Source
@@ -66,6 +67,25 @@ function Set-BackupStatus($State, $Message) {
     message = $Message
     at = (Get-Date).ToString("o")
   } | ConvertTo-Json | Set-Content -LiteralPath $StatusPath -Encoding UTF8
+}
+
+function Set-UploadedDate($Commit) {
+  $uploaded = @{}
+  if (Test-Path -LiteralPath $UploadIndexPath) {
+    try {
+      $existing = Get-Content -LiteralPath $UploadIndexPath -Raw | ConvertFrom-Json
+      foreach ($property in $existing.PSObject.Properties) {
+        $uploaded[$property.Name] = $property.Value
+      }
+    } catch {
+      $uploaded = @{}
+    }
+  }
+  $uploaded[$Date] = [pscustomobject]@{
+    commit = $Commit
+    uploaded_at = (Get-Date).ToString("o")
+  }
+  $uploaded | ConvertTo-Json | Set-Content -LiteralPath $UploadIndexPath -Encoding UTF8
 }
 
 function Enable-PartialHistoryFetch {
@@ -215,6 +235,7 @@ try {
     Remove-Item -LiteralPath $temporaryIndex -Force -ErrorAction SilentlyContinue
   }
 
+  Set-UploadedDate $commit
   Set-BackupStatus "success" "Historial $Date respaldado en GitHub."
   [pscustomobject]@{ ok = $true; month = $Month; date = $Date } | ConvertTo-Json -Compress
   exit 0

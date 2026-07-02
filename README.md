@@ -87,7 +87,7 @@ Los dos iniciadores consultan la rama `main` del repositorio Git antes de abrir 
 - Si no hay internet, la comprobación se omite y el programa continúa.
 - Si existe una versión nueva, aparece un aviso con sus cambios y botones para actualizar ahora o posponerla.
 - Antes de actualizar se respaldan la contabilidad, los comprobantes, los tokens y la configuración local.
-- Después de instalar una versión se comprueban las dependencias, se compila el panel y se valida el servidor.
+- Después de instalar una versión se usa el panel precompilado y se valida el servidor; las herramientas de desarrollo no se descargan al cliente.
 
 Antes de publicar por primera vez esta función, deja de seguir los datos locales que ya existían en el historial:
 
