@@ -1391,15 +1391,6 @@ export class App implements OnInit, OnDestroy {
     return cashBase - barberShare;
   }
 
-  accountingBarberNequiShopShare(barberId: string): number {
-    const nequiBase = this.accountingBarberNequiSales(barberId).reduce(
-      (total, sale) => total + this.saleBase(sale),
-      0,
-    );
-    const barberShare = Math.round(nequiBase * this.barberCommissionRate(barberId));
-    return nequiBase - barberShare;
-  }
-
   accountingBarberShopShare(barberId: string): number {
     const baseCommission = Math.round(
       this.accountingBarberBaseTotal(barberId) * this.barberCommissionRate(barberId),
@@ -1457,13 +1448,6 @@ export class App implements OnInit, OnDestroy {
     );
   }
 
-  accountingNequiShopShareTotal(): number {
-    return this.barbers.reduce(
-      (total, barber) => total + this.accountingBarberNequiShopShare(barber.id),
-      0,
-    );
-  }
-
   accountingCashShopShareTotal(): number {
     return this.barbers.reduce(
       (total, barber) => total + this.accountingBarberCashShopShare(barber.id),
@@ -1512,19 +1496,6 @@ export class App implements OnInit, OnDestroy {
       )
       .reduce((total, sale) => total + this.saleBase(sale), 0);
     return cashBase - Math.round(cashBase * this.closureBarberRate(barber));
-  }
-
-  closureBarberNequiShopShare(barber: ClosureBarber): number {
-    if (barber.nequi_shop_share !== undefined) return Number(barber.nequi_shop_share || 0);
-    const nequiBase = this.examinedSales()
-      .filter(
-        (sale) =>
-          sale.status === 'confirmed' &&
-          sale.barber_id === barber.barber_id &&
-          sale.payment_method === 'nequi',
-      )
-      .reduce((total, sale) => total + this.saleBase(sale), 0);
-    return nequiBase - Math.round(nequiBase * this.closureBarberRate(barber));
   }
 
   selectExaminedClosure(closure: Closure): void {

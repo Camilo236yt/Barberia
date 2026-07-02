@@ -1042,16 +1042,14 @@ th {
 
 .payout-breakdown .cash-received,
 .payout-breakdown .cash-shop-share,
-.payout-breakdown .nequi-received,
-.payout-breakdown .nequi-shop-share {
+.payout-breakdown .nequi-received {
   border: 1px solid #dcc58d;
   border-radius: 7px;
   background: #fff9e9;
   padding: 9px;
 }
 
-.payout-breakdown .nequi-received,
-.payout-breakdown .nequi-shop-share {
+.payout-breakdown .nequi-received {
   border: 1px solid #e1c6df;
   background: #fff7ff;
 }
@@ -1071,16 +1069,6 @@ th {
 
 .payout-breakdown .cash-shop-share strong {
   color: var(--green);
-}
-
-.payout-breakdown .nequi-shop-share {
-  border-color: #cbb5d8;
-  background: #faf5fc;
-}
-
-.payout-breakdown .nequi-shop-share strong {
-  color: var(--purple);
-  font-size: 1.08rem;
 }
 
 .cash-diff {
