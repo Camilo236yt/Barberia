@@ -168,6 +168,10 @@ export class App implements OnInit, OnDestroy {
   selectedView: ViewName = 'dashboard';
   isOnline = false;
   realtimeConnected = false;
+  dataLoading = false;
+  networkBusy = false;
+  lastSyncAt = '';
+  saleSaving = false;
   adminRole: 'local' | 'online' = 'local';
   adminToken = '';
   activeBranchId = '';
@@ -184,6 +188,7 @@ export class App implements OnInit, OnDestroy {
   selectedPayment: PaymentMethod = 'cash';
   proofDataUrl = '';
   proofPreviewUrl = '';
+  proofProcessing = false;
   countedCash = 0;
   examinedDate = '';
   examinedBranchId = '';
@@ -254,6 +259,10 @@ export class App implements OnInit, OnDestroy {
   infoMessage = '';
   infoMessageType: 'success' | 'error' | '' = '';
   private refreshTimer?: number;
+  private realtimeRefreshTimer?: number;
+  private dataLoadPromise?: Promise<void>;
+  private loadingBranchId = '';
+  private pendingRequests = 0;
   private backupStatusTimer?: number;
   private backupStatusBusy = false;
   private localSessionTimer?: number;
@@ -274,14 +283,16 @@ export class App implements OnInit, OnDestroy {
     this.loadAdminOptions();
     this.connectRealtime();
     this.refreshTimer = window.setInterval(() => {
+      if (this.realtimeConnected) return;
       if (this.activeBranchId) this.loadData(true);
       else this.loadAdminOptions(true);
-    }, 30000);
+    }, 60000);
   }
 
   ngOnDestroy(): void {
     this.destroyed = true;
     if (this.refreshTimer) window.clearInterval(this.refreshTimer);
+    if (this.realtimeRefreshTimer) window.clearTimeout(this.realtimeRefreshTimer);
     if (this.backupStatusTimer) window.clearInterval(this.backupStatusTimer);
     this.closeLocalSession();
     window.removeEventListener('pagehide', this.localPageHideHandler);
@@ -369,6 +380,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   async selectBranch(branchId: string): Promise<void> {
+    this.accessLoading = true;
+    this.renderNow();
     try {
       const result = await this.api<{ branch: Branch }>('/api/admin/select-branch', {
         method: 'POST',
@@ -383,6 +396,9 @@ export class App implements OnInit, OnDestroy {
     } catch (error) {
       this.accessError = this.errorMessage(error);
       await this.loadAdminOptions(true);
+    } finally {
+      this.accessLoading = false;
+      this.renderNow();
     }
   }
 
@@ -394,8 +410,31 @@ export class App implements OnInit, OnDestroy {
 
   async loadData(silent = false): Promise<void> {
     if (!this.activeBranchId) return;
+    const requestedBranchId = this.activeBranchId;
+    if (this.dataLoadPromise) {
+      if (this.loadingBranchId === requestedBranchId) return this.dataLoadPromise;
+      await this.dataLoadPromise;
+      if (this.activeBranchId !== requestedBranchId) return;
+    }
+
+    this.loadingBranchId = requestedBranchId;
+    this.dataLoading = true;
+    this.renderNow();
+    this.dataLoadPromise = this.performDataLoad(silent, requestedBranchId);
+    try {
+      await this.dataLoadPromise;
+    } finally {
+      this.dataLoadPromise = undefined;
+      this.loadingBranchId = '';
+      this.dataLoading = false;
+      this.renderNow();
+    }
+  }
+
+  private async performDataLoad(silent: boolean, requestedBranchId: string): Promise<void> {
     try {
       const data = await this.api<BootstrapResponse>('/api/bootstrap');
+      if (this.activeBranchId !== requestedBranchId) return;
       this.branches = (data.branches || []).filter((branch) => branch.active !== false);
       this.barbers = data.barbers || [];
       this.services = data.services || [];
@@ -412,11 +451,14 @@ export class App implements OnInit, OnDestroy {
         if (latestClosure?.date) this.historyMonthKey = latestClosure.date.slice(0, 7);
       }
       this.isOnline = true;
+      this.lastSyncAt = new Intl.DateTimeFormat('es-CO', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }).format(new Date());
     } catch (error) {
       this.isOnline = false;
       if (!silent) this.showSaleMessage(this.errorMessage(error), 'error');
-    } finally {
-      this.renderNow();
     }
   }
 
@@ -585,6 +627,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   async submitSale(): Promise<void> {
+    if (this.saleSaving) return;
     if (!this.activeBranchId) {
       this.showSaleMessage('Selecciona primero una barbería.', 'error');
       return;
@@ -606,6 +649,7 @@ export class App implements OnInit, OnDestroy {
       return;
     }
 
+    this.saleSaving = true;
     try {
       await this.api('/api/sales', {
         method: 'POST',
@@ -631,6 +675,9 @@ export class App implements OnInit, OnDestroy {
       await this.loadData(true);
     } catch (error) {
       this.showSaleMessage(this.errorMessage(error), 'error');
+    } finally {
+      this.saleSaving = false;
+      this.renderNow();
     }
   }
 
@@ -645,8 +692,11 @@ export class App implements OnInit, OnDestroy {
     });
     this.eventSource.addEventListener('db-changed', () => {
       this.realtimeConnected = true;
-      if (this.activeBranchId) this.loadData(true);
-      else this.loadAdminOptions(true);
+      if (this.realtimeRefreshTimer) window.clearTimeout(this.realtimeRefreshTimer);
+      this.realtimeRefreshTimer = window.setTimeout(() => {
+        if (this.activeBranchId) this.loadData(true);
+        else this.loadAdminOptions(true);
+      }, 250);
     });
     this.eventSource.addEventListener('error', () => {
       this.realtimeConnected = false;
@@ -921,14 +971,21 @@ export class App implements OnInit, OnDestroy {
       this.showSaleMessage('Selecciona una imagen.', 'error');
       return;
     }
+    this.proofProcessing = true;
+    this.saleMessage = 'Optimizando el comprobante para enviarlo más rápido…';
+    this.saleMessageType = '';
+    this.renderNow();
     try {
       const dataUrl = await this.readImage(file);
       this.proofDataUrl = dataUrl;
       this.proofPreviewUrl = dataUrl;
+      this.showSaleMessage('Comprobante listo para enviar.', 'success');
     } catch (error) {
       this.showSaleMessage(this.errorMessage(error), 'error');
     } finally {
+      this.proofProcessing = false;
       input.value = '';
+      this.renderNow();
     }
   }
 
@@ -1610,19 +1667,55 @@ export class App implements OnInit, OnDestroy {
   }
 
   private async api<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const response = await fetch(path, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Branch-Id': this.activeBranchId,
-        'X-Admin-Token': this.adminToken,
-        'X-Device-Id': this.adminDeviceId,
-        ...(options.headers || {}),
-      },
-      ...options,
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'No se pudo completar la acción.');
-    return data as T;
+    const { headers: extraHeaders, signal: suppliedSignal, ...requestOptions } = options;
+    const controller = new AbortController();
+    const timeout = suppliedSignal ? undefined : window.setTimeout(() => controller.abort(), 45000);
+    this.pendingRequests += 1;
+    this.networkBusy = true;
+    this.renderNow();
+    try {
+      const response = await fetch(path, {
+        ...requestOptions,
+        signal: suppliedSignal || controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Branch-Id': this.activeBranchId,
+          'X-Admin-Token': this.adminToken,
+          'X-Device-Id': this.adminDeviceId,
+          ...(extraHeaders || {}),
+        },
+      });
+      const text = await response.text();
+      let data: Record<string, unknown> = {};
+      if (text) {
+        try {
+          data = JSON.parse(text) as Record<string, unknown>;
+        } catch {
+          if (!response.ok) {
+            throw new Error(`El servidor online respondió con un error (${response.status}).`);
+          }
+          throw new Error('La respuesta del servidor llegó incompleta. Intenta nuevamente.');
+        }
+      }
+      if (!response.ok) {
+        throw new Error(
+          typeof data['error'] === 'string'
+            ? data['error']
+            : `No se pudo completar la acción (${response.status}).`,
+        );
+      }
+      return data as T;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('La conexión está tardando demasiado. Verifica Internet e intenta otra vez.');
+      }
+      throw error;
+    } finally {
+      if (timeout) window.clearTimeout(timeout);
+      this.pendingRequests = Math.max(0, this.pendingRequests - 1);
+      this.networkBusy = this.pendingRequests > 0;
+      this.renderNow();
+    }
   }
 
   private getAdminDeviceId(): string {
@@ -1654,7 +1747,27 @@ export class App implements OnInit, OnDestroy {
   private readImage(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
+      reader.onload = () => {
+        const image = new Image();
+        image.onload = () => {
+          const maxDimension = 1600;
+          const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          const context = canvas.getContext('2d');
+          if (!context) {
+            reject(new Error('No se pudo preparar la imagen.'));
+            return;
+          }
+          context.fillStyle = '#ffffff';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        image.onerror = () => reject(new Error('La imagen seleccionada no se pudo abrir.'));
+        image.src = String(reader.result);
+      };
       reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
       reader.readAsDataURL(file);
     });

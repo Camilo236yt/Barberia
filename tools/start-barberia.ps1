@@ -329,7 +329,7 @@ function Show-Accesses($OnlineUrl = "") {
     Write-Host $OnlineUrl
     Write-Host ""
   }
-  Write-Host "Cada administrador debe seleccionar una barberia diferente."
+  Write-Host "Hasta dos dispositivos pueden supervisar y cambiar entre ambas barberias."
   Write-Host "========================================"
   Write-Host ""
 }

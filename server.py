@@ -3,6 +3,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 import base64
 import datetime as dt
+import gzip
 import json
 import mimetypes
 import os
@@ -43,6 +44,8 @@ LOCAL_UI_MONITOR_ARMED = False
 LOCAL_UI_CLOSE_GRACE_SECONDS = 6
 LOCAL_UI_HEARTBEAT_TIMEOUT_SECONDS = 90
 HISTORY_BACKUP_LOCK = threading.Lock()
+HISTORY_ARCHIVE_CACHE_KEY = None
+HISTORY_ARCHIVE_CACHE = ([], [])
 
 DEFAULT_DB = {
     "branches": [
@@ -653,22 +656,35 @@ def restore_history_proofs(month_key):
 
 
 def combined_history(db):
+    global HISTORY_ARCHIVE_CACHE_KEY, HISTORY_ARCHIVE_CACHE
     sales = list(db["sales"])
     closures = list(db["closures"])
     sale_ids = {sale.get("id") for sale in sales}
     closure_ids = {closure.get("id") for closure in closures}
-    for archive_path in sorted(HISTORY_ARCHIVE_DIR.glob("*.zip")):
-        archived = read_history_archive(archive_path)
-        if not archived:
-            continue
-        for sale in archived.get("sales", []):
-            if sale.get("id") not in sale_ids:
-                sales.append(sale)
-                sale_ids.add(sale.get("id"))
-        for closure in archived.get("closures", []):
-            if closure.get("id") not in closure_ids:
-                closures.append(closure)
-                closure_ids.add(closure.get("id"))
+    archive_paths = sorted(HISTORY_ARCHIVE_DIR.glob("*.zip"))
+    cache_key = tuple(
+        (str(path), path.stat().st_mtime_ns, path.stat().st_size) for path in archive_paths
+    )
+    if cache_key != HISTORY_ARCHIVE_CACHE_KEY:
+        archived_sales = []
+        archived_closures = []
+        for archive_path in archive_paths:
+            archived = read_history_archive(archive_path)
+            if not archived:
+                continue
+            archived_sales.extend(archived.get("sales", []))
+            archived_closures.extend(archived.get("closures", []))
+        HISTORY_ARCHIVE_CACHE = (archived_sales, archived_closures)
+        HISTORY_ARCHIVE_CACHE_KEY = cache_key
+
+    for sale in HISTORY_ARCHIVE_CACHE[0]:
+        if sale.get("id") not in sale_ids:
+            sales.append(sale)
+            sale_ids.add(sale.get("id"))
+    for closure in HISTORY_ARCHIVE_CACHE[1]:
+        if closure.get("id") not in closure_ids:
+            closures.append(closure)
+            closure_ids.add(closure.get("id"))
     return sales, closures
 
 
@@ -859,9 +875,15 @@ class BarberiaHandler(BaseHTTPRequestHandler):
 
     def send_json(self, payload, status=200):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        use_gzip = "gzip" in (self.headers.get("Accept-Encoding") or "").lower() and len(body) >= 1024
+        if use_gzip:
+            body = gzip.compress(body, compresslevel=5)
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Vary", "Accept-Encoding")
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1281,9 +1303,43 @@ class BarberiaHandler(BaseHTTPRequestHandler):
     def serve_file(self, target):
         content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         body = target.read_bytes()
+        try:
+            target.resolve().relative_to(active_public_dir().resolve())
+            is_public_asset = True
+        except ValueError:
+            is_public_asset = False
+
+        if is_public_asset and re.search(r"-[A-Z0-9]{8,}\.(?:js|css)$", target.name):
+            cache_control = "public, max-age=31536000, immutable"
+        elif is_public_asset and target.name not in {"index.html", "sw.js"}:
+            cache_control = "public, max-age=86400"
+        else:
+            cache_control = "no-cache" if is_public_asset else "no-store"
+
+        compressible = (
+            content_type.startswith("text/")
+            or content_type
+            in {
+                "application/javascript",
+                "application/json",
+                "application/manifest+json",
+                "image/svg+xml",
+            }
+        )
+        use_gzip = (
+            compressible
+            and len(body) >= 1024
+            and "gzip" in (self.headers.get("Accept-Encoding") or "").lower()
+        )
+        if use_gzip:
+            body = gzip.compress(body, compresslevel=6)
+
         self.send_response(200)
         self.send_header("Content-Type", content_type)
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache_control)
+        self.send_header("Vary", "Accept-Encoding")
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

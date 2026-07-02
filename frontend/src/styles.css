@@ -1687,6 +1687,61 @@ body {
   gap: 10px;
 }
 
+.sync-chip {
+  display: flex;
+  min-width: 152px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #b8d9ca;
+  border-radius: 9px;
+  background: #f1faf6;
+  padding: 7px 10px;
+}
+
+.sync-chip > i {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.sync-chip.loading > i {
+  width: 15px;
+  height: 15px;
+  border: 2px solid #d9c99f;
+  border-top-color: #80611f;
+  background: transparent;
+  animation: sync-spin 700ms linear infinite;
+}
+
+.sync-chip.offline > i {
+  background: var(--red);
+}
+
+.sync-chip span,
+.sync-chip strong,
+.sync-chip small {
+  display: block;
+}
+
+.sync-chip strong {
+  font-size: 0.75rem;
+}
+
+.sync-chip small {
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 750;
+}
+
+@keyframes sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .date-chip {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -3125,6 +3180,15 @@ button:focus-visible {
   }
 
   .header-actions .quick-sale {
+    display: none;
+  }
+
+  .sync-chip {
+    min-width: 112px;
+    padding: 6px 8px;
+  }
+
+  .sync-chip small {
     display: none;
   }
 

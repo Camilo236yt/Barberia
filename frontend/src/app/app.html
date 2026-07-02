@@ -91,6 +91,13 @@
           </h1>
         </div>
         <div class="header-actions">
+          <div class="sync-chip" [class.loading]="networkBusy || dataLoading" [class.offline]="!realtimeConnected && !networkBusy">
+            <i></i>
+            <span>
+              <strong>{{ networkBusy || dataLoading ? 'Procesando…' : realtimeConnected ? 'Actualizado' : 'Reconectando…' }}</strong>
+              <small>{{ networkBusy || dataLoading ? 'No cierres esta pantalla' : lastSyncAt ? 'Última carga ' + lastSyncAt : 'Verificando conexión' }}</small>
+            </span>
+          </div>
           <span class="date-chip">{{ todayKey() }}</span>
           <button class="quick-sale" type="button" (click)="setView('sales')">+ Nueva venta</button>
         </div>
@@ -297,16 +304,18 @@
 
               <div class="proof-panel" *ngIf="selectedPayment === 'nequi'">
                 <div class="proof-actions">
-                  <label class="secondary-button file-button">Tomar foto<input class="file-input" type="file" accept="image/*" capture="environment" (change)="handleProofFile($event)"></label>
-                  <label class="secondary-button file-button">Galería<input class="file-input" type="file" accept="image/*" (change)="handleProofFile($event)"></label>
+                  <label class="secondary-button file-button">{{ proofProcessing ? 'Procesando…' : 'Tomar foto' }}<input class="file-input" type="file" accept="image/*" capture="environment" [disabled]="proofProcessing" (change)="handleProofFile($event)"></label>
+                  <label class="secondary-button file-button">{{ proofProcessing ? 'Procesando…' : 'Galería' }}<input class="file-input" type="file" accept="image/*" [disabled]="proofProcessing" (change)="handleProofFile($event)"></label>
                 </div>
                 <div class="proof-preview">
                   <img *ngIf="proofPreviewUrl; else emptyProof" [src]="proofPreviewUrl" alt="Comprobante">
-                  <ng-template #emptyProof><span>Comprobante Nequi</span></ng-template>
+                  <ng-template #emptyProof><span>{{ proofProcessing ? 'Preparando imagen…' : 'Comprobante Nequi' }}</span></ng-template>
                 </div>
               </div>
 
-              <button class="primary-button" type="submit">Guardar venta en {{ activeBranch()?.name }}</button>
+              <button class="primary-button" type="submit" [disabled]="saleSaving || proofProcessing">
+                {{ saleSaving ? 'Guardando venta…' : proofProcessing ? 'Preparando comprobante…' : 'Guardar venta en ' + activeBranch()?.name }}
+              </button>
             </fieldset>
             <p class="form-message" [class.success]="saleMessageType === 'success'" [class.error]="saleMessageType === 'error'">{{ saleMessage }}</p>
           </form>
