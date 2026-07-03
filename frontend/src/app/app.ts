@@ -1104,7 +1104,11 @@ export class App implements OnInit, OnDestroy {
   }
 
   timeOnly(value: string): string {
-    return String(value || '').slice(11, 16) || '--:--';
+    const match = String(value || '').match(/T(\d{2}):(\d{2})/);
+    if (!match) return '--:--';
+    const hour = Number(match[1]);
+    const period = hour >= 12 ? 'p. m.' : 'a. m.';
+    return `${hour % 12 || 12}:${match[2]} ${period}`;
   }
 
   formatMoney(value: number): string {
@@ -1203,7 +1207,10 @@ export class App implements OnInit, OnDestroy {
   }
 
   accountingSales(): Sale[] {
-    const sales = this.accountingAllSales();
+    const sales = [...this.accountingAllSales()].sort((left, right) => {
+      const byTime = String(left.created_at || '').localeCompare(String(right.created_at || ''));
+      return byTime || String(left.id || '').localeCompare(String(right.id || ''));
+    });
     if (this.accountingBarberFilterId === 'all') return sales;
     return sales.filter((sale) => sale.barber_id === this.accountingBarberFilterId);
   }

@@ -362,6 +362,23 @@ function Test-AppLauncherProcess($ProcessId) {
   ) -ge 0
 }
 
+function Find-AppLauncherProcessIds {
+  $launcherPath = Join-Path $AppRoot "tools\start-barberia.ps1"
+  return @(
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+      Where-Object {
+        $_.ProcessId -ne $PID -and
+        $_.CommandLine -and
+        $_.CommandLine.IndexOf(
+          $launcherPath,
+          [StringComparison]::OrdinalIgnoreCase
+        ) -ge 0
+      } |
+      ForEach-Object { $_.ProcessId } |
+      Sort-Object -Unique
+  )
+}
+
 function Test-AppServerProcess($ProcessId, $PythonFile) {
   if (-not $ProcessId) {
     return $false
@@ -396,16 +413,21 @@ function Test-AppServerProcess($ProcessId, $PythonFile) {
   }
 }
 
-function Stop-PreviousInternetSession($PythonFile) {
+function Stop-PreviousAppSession($PythonFile) {
   $existingTunnels = @(Find-NgrokEndpointProcess)
-  $launcherIds = @(
-    $existingTunnels |
-      ForEach-Object { $_.ParentProcessId } |
-      Where-Object { $_ -and $_ -ne $PID } |
-      Sort-Object -Unique
-  )
+  $launcherIds = [System.Collections.Generic.HashSet[int]]::new()
+  foreach ($launcherId in @(Find-AppLauncherProcessIds)) {
+    if ($launcherId -and $launcherId -ne $PID) {
+      [void]$launcherIds.Add([int]$launcherId)
+    }
+  }
+  foreach ($tunnel in $existingTunnels) {
+    if ($tunnel.ParentProcessId -and $tunnel.ParentProcessId -ne $PID) {
+      [void]$launcherIds.Add([int]$tunnel.ParentProcessId)
+    }
+  }
   $listener = Get-PortListener
-  $foundPreviousSession = $existingTunnels.Count -gt 0
+  $foundPreviousSession = $existingTunnels.Count -gt 0 -or $launcherIds.Count -gt 0
 
   if ($listener -and (Test-AppServerProcess $listener.OwningProcess $PythonFile)) {
     $foundPreviousSession = $true
@@ -413,7 +435,7 @@ function Stop-PreviousInternetSession($PythonFile) {
   }
 
   if ($foundPreviousSession) {
-    Write-Step "Cerrando la sesion anterior para crear un enlace nuevo..."
+    Write-Step "Cerrando la instancia anterior de Capitan Gold..."
   }
 
   # El iniciador anterior detecta el cierre del servidor y apaga su propio tunel.
@@ -426,7 +448,7 @@ function Stop-PreviousInternetSession($PythonFile) {
 
   foreach ($tunnel in @(Find-NgrokEndpointProcess)) {
     if ($tunnel.ParentProcessId -and $tunnel.ParentProcessId -ne $PID) {
-      $launcherIds += $tunnel.ParentProcessId
+      [void]$launcherIds.Add([int]$tunnel.ParentProcessId)
     }
     Stop-Process -Id $tunnel.Process.Id -Force -ErrorAction SilentlyContinue
   }
@@ -437,7 +459,7 @@ function Stop-PreviousInternetSession($PythonFile) {
   }
 
   Start-Sleep -Milliseconds 400
-  foreach ($launcherId in @($launcherIds | Sort-Object -Unique)) {
+  foreach ($launcherId in $launcherIds) {
     if (Test-AppLauncherProcess $launcherId) {
       Stop-Process -Id $launcherId -Force -ErrorAction SilentlyContinue
     }
@@ -540,18 +562,19 @@ try {
   }
 
   Write-Step "Validando el servidor..."
-  & $python.File @($python.Args + @("-m", "py_compile", "server.py"))
+  $pythonArgs = @($python.Args | ForEach-Object { [string]$_ })
+  & $python.File @pythonArgs "-m" "py_compile" "server.py"
   if ($LASTEXITCODE -ne 0) {
     throw "server.py contiene un error."
   }
 
-  if ($Internet -and -not $CheckOnly) {
-    Stop-PreviousInternetSession $python.File
+  if (-not $CheckOnly) {
+    Stop-PreviousAppSession $python.File
   }
 
   $listener = Get-PortListener
-  if ($Internet -and $listener -and -not $CheckOnly) {
-    throw "El puerto $Port sigue ocupado por otro programa y no se puede reiniciar el acceso online."
+  if ($listener -and -not $CheckOnly) {
+    throw "El puerto $Port sigue ocupado por otro programa y no se puede iniciar Capitan Gold."
   }
   if ($CheckOnly) {
     Show-Accesses $(Get-OnlineAdminLink)
@@ -568,8 +591,13 @@ try {
   $serverProcess = $null
   if (-not $listener) {
     Write-Step "Iniciando servidor..."
+    $serverArguments = [System.Collections.Generic.List[string]]::new()
+    foreach ($pythonArg in $pythonArgs) {
+      [void]$serverArguments.Add($pythonArg)
+    }
+    [void]$serverArguments.Add("server.py")
     $serverProcess = Start-Process -FilePath $python.File `
-      -ArgumentList @($python.Args + @("server.py")) `
+      -ArgumentList $serverArguments.ToArray() `
       -WorkingDirectory $AppRoot `
       -NoNewWindow `
       -PassThru
