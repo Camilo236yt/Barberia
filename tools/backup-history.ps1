@@ -165,6 +165,34 @@ function Export-GitBlob($ObjectSpec, $Destination) {
   }
 }
 
+function Assert-HistoryArchive($Path, $ExpectedDate) {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $zip = $null
+  $reader = $null
+  try {
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    $entry = $zip.GetEntry("history.json")
+    if (-not $entry) {
+      throw "El ZIP no contiene history.json."
+    }
+    $reader = New-Object System.IO.StreamReader($entry.Open(), [System.Text.Encoding]::UTF8)
+    $payload = $reader.ReadToEnd() | ConvertFrom-Json
+    if ("$($payload.date)" -ne $ExpectedDate) {
+      throw "El ZIP contiene la fecha $($payload.date) en lugar de $ExpectedDate."
+    }
+    foreach ($collection in @("sales", "closures", "expenses")) {
+      if ($null -eq $payload.$collection) {
+        throw "El ZIP no contiene la coleccion $collection."
+      }
+    }
+  } catch {
+    throw "El respaldo $([System.IO.Path]::GetFileName($Path)) esta dañado: $($_.Exception.Message)"
+  } finally {
+    if ($reader) { $reader.Dispose() }
+    if ($zip) { $zip.Dispose() }
+  }
+}
+
 function Get-FriendlyGitMessage($Message) {
   $text = "$Message"
   if (
@@ -209,25 +237,68 @@ try {
     if (-not (Fetch-HistoryBranch)) {
       throw "Todavia no hay respaldos remotos."
     }
-    $tree = Invoke-Git @("ls-tree", "-r", "--name-only", $RemoteRef, "meses/$Month")
+    $tree = Invoke-Git @("ls-tree", "-r", $RemoteRef, "meses/$Month")
     $remoteFiles = @(
       $tree.Lines |
-        Where-Object {
-          "$_" -match "^meses/$Month/\d{4}-\d{2}-\d{2}(?:-pc-[a-f0-9]{12})?\.zip$"
+        ForEach-Object {
+          if ("$_" -match "^\d+\s+blob\s+([0-9a-f]{40,64})`t(.+)$") {
+            $objectHash = $Matches[1]
+            $objectPath = $Matches[2]
+            if ($objectPath -match "^meses/$Month/\d{4}-\d{2}-\d{2}(?:-pc-[a-f0-9]{12})?\.zip$") {
+              [pscustomobject]@{ Hash = $objectHash; Path = $objectPath }
+            }
+          }
         }
     )
     if (-not $remoteFiles.Count) {
       throw "No existe un respaldo remoto para $Month."
     }
+    $downloaded = 0
+    $skipped = 0
     foreach ($remoteFile in $remoteFiles) {
-      $filename = Split-Path -Leaf $remoteFile
+      $filename = Split-Path -Leaf $remoteFile.Path
       $archivePath = Join-Path $ArchiveDirectory $filename
-      $temporaryPath = Join-Path $ArchiveDirectory "$filename.download"
-      Export-GitBlob "$RemoteRef`:$remoteFile" $temporaryPath
-      Move-Item -LiteralPath $temporaryPath -Destination $archivePath -Force
+      $expectedDate = $filename.Substring(0, 10)
+      $localMatches = $false
+      if (Test-Path -LiteralPath $archivePath) {
+        $localHash = (Invoke-Git @("hash-object", $archivePath)).Text
+        if ($localHash -eq $remoteFile.Hash) {
+          try {
+            Assert-HistoryArchive $archivePath $expectedDate
+            $localMatches = $true
+          } catch {
+            $localMatches = $false
+          }
+        }
+      }
+      if ($localMatches) {
+        $skipped += 1
+        continue
+      }
+
+      $temporaryPath = Join-Path $ArchiveDirectory (
+        "$filename.download-" + [guid]::NewGuid().ToString("N")
+      )
+      try {
+        Export-GitBlob "$RemoteRef`:$($remoteFile.Path)" $temporaryPath
+        $downloadedHash = (Invoke-Git @("hash-object", $temporaryPath)).Text
+        if ($downloadedHash -ne $remoteFile.Hash) {
+          throw "La verificacion de integridad fallo para $filename."
+        }
+        Assert-HistoryArchive $temporaryPath $expectedDate
+        Move-Item -LiteralPath $temporaryPath -Destination $archivePath -Force
+        $downloaded += 1
+      } finally {
+        Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+      }
     }
-    [pscustomobject]@{ ok = $true; month = $Month; files = $remoteFiles.Count } |
-      ConvertTo-Json -Compress
+    [pscustomobject]@{
+      ok = $true
+      month = $Month
+      files = $remoteFiles.Count
+      downloaded = $downloaded
+      skipped = $skipped
+    } | ConvertTo-Json -Compress
     exit 0
   }
 

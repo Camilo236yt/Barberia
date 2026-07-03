@@ -735,8 +735,15 @@ def restore_history_proofs(month_key):
                     continue
                 filename = member_path.name
                 target = UPLOAD_DIR / filename
-                if not target.exists():
-                    target.write_bytes(archive.read(member))
+                proof_bytes = archive.read(member)
+                if target.exists() and target.read_bytes() == proof_bytes:
+                    continue
+                temporary_target = UPLOAD_DIR / f".{filename}.{uuid.uuid4().hex}.tmp"
+                try:
+                    temporary_target.write_bytes(proof_bytes)
+                    temporary_target.replace(target)
+                finally:
+                    temporary_target.unlink(missing_ok=True)
 
 
 def combined_history(db):
@@ -752,17 +759,32 @@ def combined_history(db):
         (str(path), path.stat().st_mtime_ns, path.stat().st_size) for path in archive_paths
     )
     if cache_key != HISTORY_ARCHIVE_CACHE_KEY:
-        archived_sales = []
-        archived_closures = []
-        archived_expenses = []
+        latest_records = {
+            "sales": {},
+            "closures": {},
+            "expenses": {},
+        }
         for archive_path in archive_paths:
             archived = read_history_archive(archive_path)
             if not archived:
                 continue
-            archived_sales.extend(archived.get("sales", []))
-            archived_closures.extend(archived.get("closures", []))
-            archived_expenses.extend(archived.get("expenses", []))
-        HISTORY_ARCHIVE_CACHE = (archived_sales, archived_closures, archived_expenses)
+            generated_at = str(archived.get("generated_at") or "")
+            for collection_name in latest_records:
+                for item in archived.get(collection_name, []):
+                    item_id = item.get("id")
+                    record_key = item_id or json.dumps(
+                        item, ensure_ascii=False, sort_keys=True
+                    )
+                    previous = latest_records[collection_name].get(record_key)
+                    if not previous or generated_at >= previous[0]:
+                        latest_records[collection_name][record_key] = (
+                            generated_at,
+                            item,
+                        )
+        HISTORY_ARCHIVE_CACHE = tuple(
+            [entry[1] for entry in latest_records[name].values()]
+            for name in ("sales", "closures", "expenses")
+        )
         HISTORY_ARCHIVE_CACHE_KEY = cache_key
 
     for sale in HISTORY_ARCHIVE_CACHE[0]:

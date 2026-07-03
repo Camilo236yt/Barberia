@@ -1680,21 +1680,47 @@ export class App implements OnInit, OnDestroy {
 
   async loadHistoryBackups(): Promise<void> {
     this.historyBackupLoading = true;
-    this.historyBackupMessage = '';
+    this.historyBackupMessage = 'Buscando respaldos disponibles en GitHub...';
+    this.historyBackupMessageType = '';
+    this.renderNow();
     try {
       const result = await this.api<HistoryBackupResponse>('/api/history-backups');
       this.localHistoryMonths = result.local_months || [];
       this.remoteHistoryMonths = result.remote_months || [];
       if (result.remote_error) {
-        this.historyBackupMessage = result.remote_error;
-        this.historyBackupMessageType = 'error';
-      } else if (result.status?.message) {
-        this.historyBackupMessage = result.status.message;
-        this.historyBackupMessageType = result.status.state === 'error' ? 'error' : 'success';
-      } else {
-        this.historyBackupMessage = 'Respaldos de GitHub consultados.';
-        this.historyBackupMessageType = 'success';
+        throw new Error(result.remote_error);
       }
+
+      let downloaded = 0;
+      let verified = 0;
+      for (let index = 0; index < this.remoteHistoryMonths.length; index++) {
+        const month = this.remoteHistoryMonths[index];
+        this.historyBackupMessage =
+          `Verificando ${month} (${index + 1} de ${this.remoteHistoryMonths.length})...`;
+        this.renderNow();
+        const monthResult = await this.api<{
+          downloaded?: number;
+          skipped?: number;
+        }>('/api/history-backups/download', {
+          method: 'POST',
+          body: JSON.stringify({ month }),
+        });
+        downloaded += Number(monthResult.downloaded || 0);
+        verified += Number(monthResult.skipped || 0);
+      }
+
+      if (this.remoteHistoryMonths.length) {
+        this.localHistoryMonths = [
+          ...new Set([...this.localHistoryMonths, ...this.remoteHistoryMonths]),
+        ].sort().reverse();
+        await this.loadData(true);
+        this.historyBackupMessage = downloaded
+          ? `${downloaded} respaldo(s) descargado(s) y ${verified} verificado(s) sin duplicar.`
+          : `Todo está actualizado: ${verified} respaldo(s) ya estaban verificados en este PC.`;
+      } else {
+        this.historyBackupMessage = 'Todavía no hay respaldos disponibles en GitHub.';
+      }
+      this.historyBackupMessageType = 'success';
     } catch (error) {
       this.historyBackupMessage = this.errorMessage(error);
       this.historyBackupMessageType = 'error';

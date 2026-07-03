@@ -742,11 +742,11 @@
                 [disabled]="historyBackupLoading || historyUploadLoading || backupIsRunning()"
                 (click)="loadHistoryBackups()"
               >
-                {{ historyBackupLoading ? 'Consultando...' : 'Buscar respaldos' }}
+                {{ historyBackupLoading ? 'Sincronizando...' : 'Buscar respaldos' }}
               </button>
             </div>
           </div>
-          <p class="backup-explanation">Usa “Subir datos de hoy” para guardar en GitHub sin cerrar ni reabrir la barbería. Los meses anteriores solo se descargan cuando necesites consultarlos.</p>
+          <p class="backup-explanation">Usa “Subir datos de hoy” para guardar en GitHub sin cerrar la barbería. “Buscar respaldos” verifica y descarga automáticamente lo que falte en este PC sin duplicar registros.</p>
           <div
             class="backup-progress-card history-backup-progress"
             *ngIf="backupProgressVisible"
