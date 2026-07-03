@@ -512,7 +512,7 @@ function Show-Accesses($OnlineUrl = "") {
     Write-Host $OnlineUrl
     Write-Host ""
   }
-  Write-Host "Hasta dos dispositivos pueden supervisar y cambiar entre ambas barberias."
+  Write-Host "Hasta diez dispositivos pueden supervisar y cambiar entre ambas barberias."
   Write-Host "========================================"
   Write-Host ""
 }

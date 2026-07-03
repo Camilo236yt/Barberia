@@ -204,7 +204,7 @@ export class App implements OnInit, OnDestroy {
   accessLoading = true;
   accessError = '';
   connectedAdminDevices = 0;
-  maxAdminDevices = 2;
+  maxAdminDevices = 10;
 
   selectedServiceId = '';
   isSpecialService = false;
@@ -404,7 +404,7 @@ export class App implements OnInit, OnDestroy {
       this.adminRole = options.role;
       this.availableBranches = options.branches || [];
       this.connectedAdminDevices = options.connected_devices || 1;
-      this.maxAdminDevices = options.max_devices || 2;
+      this.maxAdminDevices = options.max_devices || 10;
       this.accessError = '';
       if (options.selected_branch_id && !keepPickerOpen) {
         this.activeBranchId = options.selected_branch_id;

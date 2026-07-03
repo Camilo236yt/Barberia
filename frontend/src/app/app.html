@@ -5,7 +5,7 @@
     <img class="brand-logo large" src="/capitan-gold-logo.png" alt="Capitan Gold Barber Shop">
     <span class="eyebrow">{{ adminRole === 'online' ? 'Administrador online' : 'Administrador local' }}</span>
     <h1>Selecciona tu barbería</h1>
-    <p>Los dos dispositivos autorizados pueden entrar a cualquiera de las sedes para monitorear o ayudar.</p>
+    <p>Hasta diez dispositivos autorizados pueden entrar a cualquiera de las sedes para monitorear o ayudar.</p>
     <span class="status-pill online">{{ connectedAdminDevices }}/{{ maxAdminDevices }} dispositivos conectados</span>
     <div class="branch-options" *ngIf="availableBranches.length; else noAvailableBranch">
       <button type="button" *ngFor="let branch of availableBranches; trackBy: trackById" (click)="selectBranch(branch.id)">

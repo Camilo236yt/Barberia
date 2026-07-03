@@ -37,7 +37,7 @@ DATA_VERSION = 0
 ADMIN_ASSIGNMENTS = {}
 ADMIN_DEVICE_SESSIONS = {}
 ADMIN_ASSIGNMENT_LOCK = threading.Lock()
-MAX_ADMIN_DEVICES = 2
+MAX_ADMIN_DEVICES = 10
 ADMIN_DEVICE_TIMEOUT_SECONDS = 90
 LOCAL_UI_SESSIONS = {}
 LOCAL_UI_SESSION_LOCK = threading.Lock()
@@ -1124,7 +1124,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 self.send_json(
                     {
                         "error": (
-                            "Ya hay dos dispositivos administrativos conectados. "
+                            f"Ya hay {MAX_ADMIN_DEVICES} dispositivos administrativos conectados. "
                             "Cierra uno o espera un momento para ingresar."
                         )
                     },
