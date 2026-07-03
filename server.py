@@ -243,6 +243,18 @@ def read_db():
             sale["branch_name"] = "Barbería 1"
             changed = True
 
+    for expense in data["expenses"]:
+        expense_type = expense.get("expense_type")
+        if expense_type not in {"shop", "barber"}:
+            expense_type = "barber" if expense.get("barber_id") else "shop"
+            expense["expense_type"] = expense_type
+            changed = True
+        if expense_type == "barber" and not expense.get("barber_name"):
+            barber = find_by_id(data["barbers"], expense.get("barber_id"))
+            if barber:
+                expense["barber_name"] = barber["name"]
+                changed = True
+
     if changed:
         write_db(data)
     return data
@@ -1675,12 +1687,21 @@ class BarberiaHandler(BaseHTTPRequestHandler):
         if parsed_date > dt.date.today():
             raise ValueError("No puedes registrar un gasto en una fecha futura.")
 
+        expense_type = str(payload.get("expense_type") or "shop").strip()
+        if expense_type not in {"shop", "barber"}:
+            raise ValueError("Selecciona si es un gasto de la barberia o un descuento al barbero.")
+
         branch_id = self.headers.get("X-Branch-Id")
         with LOCK:
             db = read_db()
             branch = find_by_id(db["branches"], branch_id)
             if not branch or not branch.get("active", True):
                 raise ValueError("Barberia no encontrada.")
+            barber = None
+            if expense_type == "barber":
+                barber = find_by_id(db["barbers"], payload.get("barber_id"))
+                if not barber or barber.get("branch_id") != branch_id:
+                    raise ValueError("Selecciona el barbero al que se le descontara.")
             materialize_archived_day(db, date_key)
             expense = {
                 "id": f"gasto-{uuid.uuid4().hex[:10]}",
@@ -1689,6 +1710,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 "branch_id": branch_id,
                 "description": description,
                 "amount": amount,
+                "expense_type": expense_type,
+                "barber_id": barber["id"] if barber else None,
+                "barber_name": barber["name"] if barber else None,
             }
             db["expenses"].insert(0, expense)
             write_db(db)
@@ -1701,6 +1725,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             self.send_json({"expense": expense}, 201)
 
     def delete_expense(self, expense_id):
+        self.read_json_body()
         with LOCK:
             db = read_db()
             expense = materialize_archived_expense(db, expense_id)
@@ -1884,6 +1909,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             self.send_json({"sale": sale})
 
     def delete_sale(self, sale_id):
+        self.read_json_body()
         with LOCK:
             db = read_db()
             sale = materialize_archived_sale(db, sale_id)

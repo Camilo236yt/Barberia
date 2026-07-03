@@ -1105,9 +1105,18 @@ th {
   color: var(--green);
 }
 
+.barber-final-summary .barber-deduction {
+  background: #fff2f1;
+}
+
+.barber-final-summary .barber-deduction strong,
+.barber-final-summary .negative strong {
+  color: var(--red);
+}
+
 .expense-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1145,7 +1154,12 @@ th {
 
 .expense-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(130px, 0.35fr) auto;
+  grid-template-columns:
+    minmax(160px, 0.55fr)
+    minmax(220px, 1fr)
+    minmax(130px, 0.35fr)
+    minmax(160px, 0.55fr)
+    auto;
   align-items: end;
   gap: 10px;
 }
@@ -1184,6 +1198,10 @@ th {
 .expense-list article > strong {
   color: var(--red);
   white-space: nowrap;
+}
+
+.accounting-movement-editor {
+  margin-bottom: 16px;
 }
 
 @media (max-width: 760px) {

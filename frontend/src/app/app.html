@@ -603,7 +603,64 @@
               <div><p>Movimientos diarios</p><h2>{{ accountingDate }} · {{ activeBranch()?.name }}</h2></div>
               <span class="status-pill">{{ accountingSales().length }} registros</span>
             </div>
-            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: accountingSales(), showBranch: false }"></ng-container>
+            <p
+              class="form-message history-action-message"
+              [class.success]="accountingMovementMessageType === 'success'"
+              [class.error]="accountingMovementMessageType === 'error'"
+              *ngIf="accountingMovementMessage"
+            >
+              {{ accountingMovementMessage }}
+            </p>
+            <form
+              id="accounting-sale-editor"
+              class="history-sale-editor accounting-movement-editor"
+              *ngIf="editingSale && saleEditContext === 'accounting'"
+              (ngSubmit)="saveSaleEdit()"
+            >
+              <div class="history-editor-heading">
+                <div>
+                  <p>Modificar movimiento</p>
+                  <h3>{{ saleDay(editingSale) }} · {{ timeOnly(editingSale.created_at) }}</h3>
+                </div>
+                <button class="small-button" type="button" (click)="cancelSaleEdit()">Cancelar</button>
+              </div>
+              <div class="history-editor-grid">
+                <label>
+                  <span>Barbero</span>
+                  <select name="accountingEditBarber" [(ngModel)]="editSaleForm.barber_id" required>
+                    <option *ngIf="!barberIsAvailable(editingSale.barber_id)" [value]="editingSale.barber_id">{{ editingSale.barber_name }} (histórico)</option>
+                    <option *ngFor="let barber of barbers; trackBy: trackById" [value]="barber.id">{{ barber.name }}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Servicio</span>
+                  <input name="accountingEditService" type="text" minlength="2" maxlength="60" [(ngModel)]="editSaleForm.service_name" required>
+                </label>
+                <label>
+                  <span>Valor cobrado</span>
+                  <input name="accountingEditAmount" type="number" min="1" step="1000" [(ngModel)]="editSaleForm.amount" required>
+                </label>
+                <label>
+                  <span>Forma de pago</span>
+                  <select name="accountingEditPayment" [(ngModel)]="editSaleForm.payment_method" required>
+                    <option value="cash">Efectivo</option>
+                    <option value="nequi" [disabled]="!editingSale.proof_url">Nequi</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Cliente (opcional)</span>
+                  <input name="accountingEditClient" type="text" maxlength="80" [(ngModel)]="editSaleForm.client_name">
+                </label>
+                <label>
+                  <span>Referencia (opcional)</span>
+                  <input name="accountingEditReference" type="text" maxlength="120" [(ngModel)]="editSaleForm.proof_note">
+                </label>
+              </div>
+              <button class="primary-button history-save-button" type="submit" [disabled]="historySaleSaving">
+                {{ historySaleSaving ? 'Guardando...' : 'Guardar cambios' }}
+              </button>
+            </form>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: accountingSales(), showBranch: false, allowActions: true, actionContext: 'accounting' }"></ng-container>
           </section>
 
           <section class="tool-panel full-span">
@@ -631,7 +688,9 @@
                 </div>
                 <div class="barber-final-summary">
                   <div><span>Dinero recibido</span><strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong></div>
-                  <div><span>A {{ barber.name }} le corresponde</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
+                  <div><span>Comisión y propina</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
+                  <div class="barber-deduction"><span>Descuentos</span><strong>− {{ formatMoney(accountingBarberDeductionTotal(barber.id)) }}</strong></div>
+                  <div [class.negative]="accountingBarberNet(barber.id) < 0"><span>Pago final a {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberNet(barber.id)) }}</strong></div>
                 </div>
                 <small>{{ accountingBarberCount(barber.id) }} servicios confirmados</small>
               </article>
@@ -640,12 +699,13 @@
 
           <section class="tool-panel full-span expense-panel">
             <div class="panel-heading">
-              <div><p>Gastos · {{ accountingDate }}</p><h2>Descuentos de la barbería</h2></div>
-              <span class="status-pill">{{ accountingExpenses().length }} gastos</span>
+              <div><p>Gastos y descuentos · {{ accountingDate }}</p><h2>Movimientos que se deben restar</h2></div>
+              <span class="status-pill">{{ accountingExpenses().length }} registros</span>
             </div>
             <div class="expense-summary">
               <div><span>Parte bruta de la barbería</span><strong>{{ formatMoney(accountingShopShare()) }}</strong></div>
-              <div><span>Total de gastos</span><strong>− {{ formatMoney(accountingExpenseTotal()) }}</strong></div>
+              <div><span>Gastos propios de la barbería</span><strong>− {{ formatMoney(accountingShopExpenseTotal()) }}</strong></div>
+              <div><span>Descuentos a barberos</span><strong>+ {{ formatMoney(accountingBarberDeductionTotal()) }}</strong></div>
               <div [class.negative]="accountingShopNetAfterExpenses() < 0">
                 <span>Saldo neto de la barbería</span>
                 <strong>{{ formatMoney(accountingShopNetAfterExpenses()) }}</strong>
@@ -653,21 +713,41 @@
             </div>
             <form class="expense-form" (ngSubmit)="createExpense()">
               <label class="field">
-                <span>Concepto del gasto</span>
-                <input name="expenseDescription" type="text" minlength="2" maxlength="100" placeholder="Ej. Compra de productos" [(ngModel)]="newExpense.description" required>
+                <span>Tipo</span>
+                <select name="expenseType" [(ngModel)]="newExpense.expense_type">
+                  <option value="shop">Gasto de la barbería</option>
+                  <option value="barber">Descuento a un barbero</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Concepto</span>
+                <input name="expenseDescription" type="text" minlength="2" maxlength="100" [placeholder]="newExpense.expense_type === 'barber' ? 'Ej. Gaseosa' : 'Ej. Compra de productos'" [(ngModel)]="newExpense.description" required>
               </label>
               <label class="field">
                 <span>Valor</span>
                 <input name="expenseAmount" type="number" min="1" step="1000" [(ngModel)]="newExpense.amount" required>
               </label>
+              <label class="field" *ngIf="newExpense.expense_type === 'barber'">
+                <span>Descontar a</span>
+                <select name="expenseBarber" [(ngModel)]="newExpense.barber_id" required>
+                  <option value="">Selecciona el barbero</option>
+                  <option *ngFor="let barber of barbers; trackBy: trackById" [value]="barber.id">{{ barber.name }}</option>
+                </select>
+              </label>
               <button class="primary-button" type="submit" [disabled]="expenseSaving">
-                {{ expenseSaving ? 'Guardando gasto…' : 'Agregar gasto' }}
+                {{ expenseSaving ? 'Guardando…' : newExpense.expense_type === 'barber' ? 'Agregar descuento' : 'Agregar gasto' }}
               </button>
             </form>
             <p class="form-message" [class.success]="expenseMessageType === 'success'" [class.error]="expenseMessageType === 'error'">{{ expenseMessage }}</p>
             <div class="expense-list" *ngIf="accountingExpenses().length; else noExpenses">
               <article *ngFor="let expense of accountingExpenses(); trackBy: trackById">
-                <div><strong>{{ expense.description }}</strong><small>{{ expense.date }}</small></div>
+                <div>
+                  <strong>{{ expense.description }}</strong>
+                  <small>
+                    {{ expense.date }} ·
+                    {{ expenseType(expense) === 'barber' ? 'Se descuenta a ' + (expense.barber_name || 'barbero histórico') : 'Gasto de la barbería' }}
+                  </small>
+                </div>
                 <strong>− {{ formatMoney(expense.amount) }}</strong>
                 <button class="small-button reject" type="button" (click)="deleteExpense(expense)">Eliminar</button>
               </article>
@@ -850,7 +930,7 @@
             <p class="form-message history-action-message" [class.success]="historyActionMessageType === 'success'" [class.error]="historyActionMessageType === 'error'" *ngIf="historyActionMessage">
               {{ historyActionMessage }}
             </p>
-            <form id="history-sale-editor" class="history-sale-editor" *ngIf="editingSale" (ngSubmit)="saveSaleEdit()">
+            <form id="history-sale-editor" class="history-sale-editor" *ngIf="editingSale && saleEditContext === 'history'" (ngSubmit)="saveSaleEdit()">
               <div class="history-editor-heading">
                 <div>
                   <p>Modificar corte</p>
@@ -894,7 +974,7 @@
                 {{ historySaleSaving ? 'Guardando...' : 'Guardar cambios' }}
               </button>
             </form>
-            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedSales(), showBranch: false, allowActions: true }"></ng-container>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedSales(), showBranch: false, allowActions: true, actionContext: 'history' }"></ng-container>
           </section>
           <ng-template #chooseClosure><section class="tool-panel history-detail empty-history"><div class="empty-state">Selecciona un cierre para ver su contabilidad completa</div></section></ng-template>
         </div>
@@ -990,7 +1070,7 @@
     </main>
   </div>
 
-<ng-template #salesTable let-salesList="salesList" let-showBranch="showBranch" let-allowActions="allowActions">
+<ng-template #salesTable let-salesList="salesList" let-showBranch="showBranch" let-allowActions="allowActions" let-actionContext="actionContext">
   <div class="table-wrap">
     <table>
       <thead>
@@ -1024,8 +1104,8 @@
           <td data-label="Estado"><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
           <td data-label="Acciones" *ngIf="allowActions">
             <div class="history-row-actions">
-              <button class="small-button approve" type="button" (click)="startEditSale(sale)">Modificar</button>
-              <button class="small-button reject" type="button" (click)="deleteSale(sale)">Eliminar</button>
+              <button class="small-button approve" type="button" (click)="startEditSale(sale, actionContext || 'history')">Modificar</button>
+              <button class="small-button reject" type="button" (click)="deleteSale(sale, actionContext || 'history')">Eliminar</button>
             </div>
           </td>
         </tr>

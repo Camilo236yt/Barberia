@@ -56,6 +56,9 @@ interface Expense {
   branch_id: string;
   description: string;
   amount: number;
+  expense_type?: 'shop' | 'barber';
+  barber_id?: string | null;
+  barber_name?: string | null;
 }
 
 interface ClosureBarber {
@@ -238,6 +241,8 @@ export class App implements OnInit, OnDestroy {
   newExpense = {
     description: '',
     amount: 0,
+    expense_type: 'shop' as 'shop' | 'barber',
+    barber_id: '',
   };
   historyMonthKey = this.todayKey().slice(0, 7);
   localHistoryMonths: string[] = [];
@@ -249,7 +254,10 @@ export class App implements OnInit, OnDestroy {
   historyActionMessage = '';
   historyActionMessageType: 'success' | 'error' | '' = '';
   editingSale: Sale | null = null;
+  saleEditContext: 'history' | 'accounting' = 'history';
   historySaleSaving = false;
+  accountingMovementMessage = '';
+  accountingMovementMessageType: 'success' | 'error' | '' = '';
   editSaleForm = {
     barber_id: '',
     service_name: '',
@@ -751,8 +759,9 @@ export class App implements OnInit, OnDestroy {
     }
   }
 
-  startEditSale(sale: Sale): void {
+  startEditSale(sale: Sale, context: 'history' | 'accounting' = 'history'): void {
     this.editingSale = sale;
+    this.saleEditContext = context;
     this.editSaleForm = {
       barber_id: sale.barber_id,
       service_name: sale.service_name,
@@ -761,9 +770,15 @@ export class App implements OnInit, OnDestroy {
       client_name: sale.client_name || '',
       proof_note: sale.proof_note || '',
     };
-    this.historyActionMessage = '';
+    if (context === 'accounting') {
+      this.accountingMovementMessage = '';
+    } else {
+      this.historyActionMessage = '';
+    }
     window.setTimeout(() => {
-      document.getElementById('history-sale-editor')?.scrollIntoView({
+      document.getElementById(
+        context === 'accounting' ? 'accounting-sale-editor' : 'history-sale-editor',
+      )?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
       });
@@ -787,21 +802,35 @@ export class App implements OnInit, OnDestroy {
         body: JSON.stringify(this.editSaleForm),
       });
       this.editingSale = null;
-      this.historyActionMessage = 'Corte modificado correctamente.';
-      this.historyActionMessageType = 'success';
+      if (this.saleEditContext === 'accounting') {
+        this.accountingMovementMessage = 'Movimiento modificado correctamente.';
+        this.accountingMovementMessageType = 'success';
+      } else {
+        this.historyActionMessage = 'Corte modificado correctamente.';
+        this.historyActionMessageType = 'success';
+      }
       await this.loadData(true);
     } catch (error) {
-      this.historyActionMessage = this.errorMessage(error);
-      this.historyActionMessageType = 'error';
+      if (this.saleEditContext === 'accounting') {
+        this.accountingMovementMessage = this.errorMessage(error);
+        this.accountingMovementMessageType = 'error';
+      } else {
+        this.historyActionMessage = this.errorMessage(error);
+        this.historyActionMessageType = 'error';
+      }
     } finally {
       this.historySaleSaving = false;
       this.renderNow();
     }
   }
 
-  async deleteSale(sale: Sale): Promise<void> {
+  async deleteSale(
+    sale: Sale,
+    context: 'history' | 'accounting' = 'history',
+  ): Promise<void> {
+    const inAccounting = context === 'accounting';
     const confirmed = window.confirm(
-      `¿Eliminar este corte del historial?\n\n${this.saleDay(sale)} · ${sale.barber_name} · ${sale.service_name} · ${this.formatMoney(sale.amount)}\n\nEsta acción no se puede deshacer.`,
+      `¿Eliminar este ${inAccounting ? 'movimiento diario' : 'corte del historial'}?\n\n${this.saleDay(sale)} · ${sale.barber_name} · ${sale.service_name} · ${this.formatMoney(sale.amount)}\n\nEsta acción no se puede deshacer.`,
     );
     if (!confirmed) return;
 
@@ -811,12 +840,22 @@ export class App implements OnInit, OnDestroy {
         body: JSON.stringify({}),
       });
       if (this.editingSale?.id === sale.id) this.editingSale = null;
-      this.historyActionMessage = 'Corte eliminado correctamente.';
-      this.historyActionMessageType = 'success';
+      if (inAccounting) {
+        this.accountingMovementMessage = 'Movimiento eliminado correctamente.';
+        this.accountingMovementMessageType = 'success';
+      } else {
+        this.historyActionMessage = 'Corte eliminado correctamente.';
+        this.historyActionMessageType = 'success';
+      }
       await this.loadData(true);
     } catch (error) {
-      this.historyActionMessage = this.errorMessage(error);
-      this.historyActionMessageType = 'error';
+      if (inAccounting) {
+        this.accountingMovementMessage = this.errorMessage(error);
+        this.accountingMovementMessageType = 'error';
+      } else {
+        this.historyActionMessage = this.errorMessage(error);
+        this.historyActionMessageType = 'error';
+      }
       this.renderNow();
     }
   }
@@ -1188,6 +1227,7 @@ export class App implements OnInit, OnDestroy {
     this.accountingDate = dateKey;
     this.accountingSaleFormOpen = false;
     this.accountingSaleMessage = '';
+    if (this.saleEditContext === 'accounting') this.editingSale = null;
   }
 
   openAccountingSaleForm(): void {
@@ -1452,6 +1492,10 @@ export class App implements OnInit, OnDestroy {
     return this.accountingTotal() - this.accountingPayrollTotal();
   }
 
+  expenseType(expense: Expense): 'shop' | 'barber' {
+    return expense.expense_type === 'barber' ? 'barber' : 'shop';
+  }
+
   accountingExpenses(): Expense[] {
     return this.expenses
       .filter(
@@ -1461,15 +1505,42 @@ export class App implements OnInit, OnDestroy {
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
 
-  accountingExpenseTotal(): number {
-    return this.accountingExpenses().reduce(
+  accountingShopExpenses(): Expense[] {
+    return this.accountingExpenses().filter((expense) => this.expenseType(expense) === 'shop');
+  }
+
+  accountingBarberExpenses(): Expense[] {
+    return this.accountingExpenses().filter(
+      (expense) => this.expenseType(expense) === 'barber',
+    );
+  }
+
+  accountingShopExpenseTotal(): number {
+    return this.accountingShopExpenses().reduce(
       (total, expense) => total + Number(expense.amount || 0),
       0,
     );
   }
 
+  accountingBarberDeductionTotal(barberId?: string): number {
+    return this.accountingBarberExpenses()
+      .filter((expense) => !barberId || expense.barber_id === barberId)
+      .reduce((total, expense) => total + Number(expense.amount || 0), 0);
+  }
+
+  accountingBarberNet(barberId: string): number {
+    return (
+      this.accountingBarberCommission(barberId) -
+      this.accountingBarberDeductionTotal(barberId)
+    );
+  }
+
   accountingShopNetAfterExpenses(): number {
-    return this.accountingShopShare() - this.accountingExpenseTotal();
+    return (
+      this.accountingShopShare() -
+      this.accountingShopExpenseTotal() +
+      this.accountingBarberDeductionTotal()
+    );
   }
 
   async createExpense(): Promise<void> {
@@ -1484,6 +1555,11 @@ export class App implements OnInit, OnDestroy {
       this.expenseMessageType = 'error';
       return;
     }
+    if (this.newExpense.expense_type === 'barber' && !this.newExpense.barber_id) {
+      this.expenseMessage = 'Selecciona el barbero al que se le hará el descuento.';
+      this.expenseMessageType = 'error';
+      return;
+    }
     this.expenseSaving = true;
     try {
       await this.api('/api/expenses', {
@@ -1492,10 +1568,22 @@ export class App implements OnInit, OnDestroy {
           date: this.accountingDate,
           description: this.newExpense.description.trim(),
           amount: Number(this.newExpense.amount),
+          expense_type: this.newExpense.expense_type,
+          barber_id:
+            this.newExpense.expense_type === 'barber' ? this.newExpense.barber_id : '',
         }),
       });
-      this.newExpense = { description: '', amount: 0 };
-      this.expenseMessage = `Gasto agregado al ${this.accountingDate}.`;
+      const savedType = this.newExpense.expense_type;
+      this.newExpense = {
+        description: '',
+        amount: 0,
+        expense_type: 'shop',
+        barber_id: '',
+      };
+      this.expenseMessage =
+        savedType === 'barber'
+          ? `Descuento al barbero agregado al ${this.accountingDate}.`
+          : `Gasto de la barbería agregado al ${this.accountingDate}.`;
       this.expenseMessageType = 'success';
       await this.loadData(true);
     } catch (error) {
