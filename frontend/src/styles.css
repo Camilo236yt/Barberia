@@ -1071,6 +1071,40 @@ th {
   color: var(--green);
 }
 
+.barber-final-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border-top: 2px solid #c9a85e;
+  padding-top: 10px;
+}
+
+.barber-final-summary > div {
+  display: grid;
+  gap: 4px;
+  border-radius: 8px;
+  background: #f7f5f1;
+  padding: 10px;
+}
+
+.barber-final-summary span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.barber-final-summary strong {
+  font-size: 1.08rem;
+}
+
+.barber-final-summary > div:last-child {
+  background: #eef8f3;
+}
+
+.barber-final-summary > div:last-child strong {
+  color: var(--green);
+}
+
 .cash-diff {
   border-radius: 8px;
   background: #f4f7fb;

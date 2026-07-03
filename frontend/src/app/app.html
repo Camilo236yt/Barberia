@@ -612,6 +612,7 @@
               <span class="status-pill">{{ accountingConfirmedSales().length }} ventas confirmadas</span>
             </div>
             <div class="payout-summary">
+              <div><span>Total dinero recibido</span><strong>{{ formatMoney(accountingTotal()) }}</strong></div>
               <div><span>Total pagado en efectivo</span><strong>{{ formatMoney(accountingCash()) }}</strong></div>
               <div><span>Total recibido por Nequi</span><strong>{{ formatMoney(accountingNequi()) }}</strong></div>
               <div><span>Para la barbería del efectivo</span><strong>{{ formatMoney(accountingCashShopShareTotal()) }}</strong></div>
@@ -627,7 +628,10 @@
                   <div class="nequi-received"><span>Recibió por Nequi</span><strong>{{ formatMoney(accountingBarberNequi(barber.id)) }}</strong></div>
                   <div class="cash-shop-share"><span>Para la barbería del efectivo</span><strong>{{ formatMoney(accountingBarberCashShopShare(barber.id)) }}</strong></div>
                   <div class="tip-share"><span>Propina</span><strong>{{ formatMoney(accountingBarberTip(barber.id)) }}</strong></div>
-                  <div><span>Ganancia de {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
+                </div>
+                <div class="barber-final-summary">
+                  <div><span>Dinero recibido</span><strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong></div>
+                  <div><span>A {{ barber.name }} le corresponde</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
                 </div>
                 <small>{{ accountingBarberCount(barber.id) }} servicios confirmados</small>
               </article>
