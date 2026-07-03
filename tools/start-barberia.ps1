@@ -323,7 +323,7 @@ function Stop-RemoteNgrokEndpoint($EndpointUrl) {
 
 function Find-NgrokEndpointProcess {
   $expectedPath = [System.IO.Path]::GetFullPath($NgrokExe)
-  $matches = @()
+  $foundProcesses = @()
   foreach ($processInfo in Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) {
     if (-not $processInfo.ExecutablePath -or -not $processInfo.CommandLine) {
       continue
@@ -335,14 +335,14 @@ function Find-NgrokEndpointProcess {
       $parentIsRunning = $null -ne (
         Get-Process -Id $processInfo.ParentProcessId -ErrorAction SilentlyContinue
       )
-      $matches += [pscustomobject]@{
+      $foundProcesses += [pscustomobject]@{
         Process = Get-Process -Id $processInfo.ProcessId -ErrorAction SilentlyContinue
         ParentProcessId = $processInfo.ParentProcessId
         IsOrphan = -not $parentIsRunning
       }
     }
   }
-  return @($matches | Where-Object { $_.Process })
+  return @($foundProcesses | Where-Object { $_.Process })
 }
 
 function Test-AppLauncherProcess($ProcessId) {
@@ -724,6 +724,20 @@ try {
     }
   }
 } catch {
+  try {
+    $logDirectory = Join-Path $AppRoot "tools\logs"
+    New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+    $errorDetails = @(
+      "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $($_.Exception.Message)"
+      $_.InvocationInfo.PositionMessage
+      $_.ScriptStackTrace
+      ""
+    ) -join [Environment]::NewLine
+    Add-Content -LiteralPath (Join-Path $logDirectory "startup-error.log") `
+      -Value $errorDetails `
+      -Encoding UTF8
+  } catch {
+  }
   Write-Host ""
   Write-Host "No se pudo iniciar Barberia Control:" -ForegroundColor Red
   Write-Host $_.Exception.Message -ForegroundColor Red
