@@ -10,7 +10,7 @@ if not exist "tools\configure-github.ps1" (
   exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\configure-github.ps1" -AppRoot "%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\configure-github.ps1" -AppRoot "%~dp0."
 set "RESULTADO=%ERRORLEVEL%"
 echo.
 pause

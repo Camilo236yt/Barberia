@@ -8,7 +8,9 @@ $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($f
 if (-not $AppRoot) {
   $AppRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 } else {
-  $AppRoot = (Resolve-Path $AppRoot).Path
+  # Un .cmd puede dejar una comilla literal si la ruta termina en "\".
+  $cleanAppRoot = "$AppRoot".Trim().Trim('"')
+  $AppRoot = (Resolve-Path -LiteralPath $cleanAppRoot).Path
 }
 
 $RepositoryUrl = "https://github.com/Camilo236yt/Barberia.git"
