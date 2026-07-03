@@ -218,6 +218,7 @@ export class App implements OnInit, OnDestroy {
   examinedBranchId = '';
   accountingDate = this.todayKey();
   accountingMonthKey = this.todayKey().slice(0, 7);
+  accountingBarberFilterId = 'all';
   accountingSaleFormOpen = false;
   supportsHistoricalSales = false;
   accountingSaleSaving = false;
@@ -515,6 +516,12 @@ export class App implements OnInit, OnDestroy {
     }
     if (!this.barbers.some((barber) => barber.id === this.accountingSaleForm.barber_id)) {
       this.accountingSaleForm.barber_id = this.barbers[0]?.id || '';
+    }
+    if (
+      this.accountingBarberFilterId !== 'all' &&
+      !this.barbers.some((barber) => barber.id === this.accountingBarberFilterId)
+    ) {
+      this.accountingBarberFilterId = 'all';
     }
     if (
       this.accountingSaleForm.service_id !== 'especial' &&
@@ -1191,12 +1198,18 @@ export class App implements OnInit, OnDestroy {
     return this.salesForDate(dateKey, branchId).filter((sale) => sale.status === 'confirmed');
   }
 
-  accountingSales(): Sale[] {
+  accountingAllSales(): Sale[] {
     return this.salesForDate(this.accountingDate);
   }
 
+  accountingSales(): Sale[] {
+    const sales = this.accountingAllSales();
+    if (this.accountingBarberFilterId === 'all') return sales;
+    return sales.filter((sale) => sale.barber_id === this.accountingBarberFilterId);
+  }
+
   accountingConfirmedSales(): Sale[] {
-    return this.confirmedSalesForDate(this.accountingDate);
+    return this.accountingSales().filter((sale) => sale.status === 'confirmed');
   }
 
   accountingTotal(): number {
@@ -1221,6 +1234,30 @@ export class App implements OnInit, OnDestroy {
 
   accountingPendingTotal(): number {
     return this.sum(this.accountingPendingSales());
+  }
+
+  selectAccountingBarberFilter(barberId: string): void {
+    this.accountingBarberFilterId = barberId;
+    this.accountingMovementMessage = '';
+    if (this.saleEditContext === 'accounting') this.editingSale = null;
+    if (barberId !== 'all') {
+      this.accountingSaleForm.barber_id = barberId;
+      this.newExpense.expense_type = 'barber';
+      this.newExpense.barber_id = barberId;
+    }
+  }
+
+  accountingFilterLabel(): string {
+    if (this.accountingBarberFilterId === 'all') return 'Toda la barbería';
+    return (
+      this.barbers.find((barber) => barber.id === this.accountingBarberFilterId)?.name ||
+      'Barbero'
+    );
+  }
+
+  accountingVisibleBarbers(): Barber[] {
+    if (this.accountingBarberFilterId === 'all') return this.barbers;
+    return this.barbers.filter((barber) => barber.id === this.accountingBarberFilterId);
   }
 
   selectAccountingDate(dateKey: string): void {
@@ -1503,6 +1540,15 @@ export class App implements OnInit, OnDestroy {
           expense.branch_id === this.activeBranchId && expense.date === this.accountingDate,
       )
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  accountingVisibleExpenses(): Expense[] {
+    if (this.accountingBarberFilterId === 'all') return this.accountingExpenses();
+    return this.accountingExpenses().filter(
+      (expense) =>
+        this.expenseType(expense) === 'barber' &&
+        expense.barber_id === this.accountingBarberFilterId,
+    );
   }
 
   accountingShopExpenses(): Expense[] {

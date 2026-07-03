@@ -1152,6 +1152,10 @@ th {
   color: var(--green);
 }
 
+.barber-expense-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .expense-form {
   display: grid;
   grid-template-columns:
@@ -2343,6 +2347,53 @@ body {
 
 .accounting-add-sale-button {
   width: auto;
+}
+
+.accounting-barber-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  padding: 8px;
+  margin-bottom: 14px;
+  scrollbar-width: thin;
+}
+
+.accounting-barber-tabs button {
+  display: grid;
+  flex: 1 0 135px;
+  min-height: 58px;
+  align-content: center;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fafafa;
+  color: var(--ink);
+  padding: 8px 13px;
+  text-align: left;
+}
+
+.accounting-barber-tabs button span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.accounting-barber-tabs button strong {
+  font-size: 0.94rem;
+}
+
+.accounting-barber-tabs button.active {
+  border-color: #111;
+  background: #171717;
+  color: #fff;
+}
+
+.accounting-barber-tabs button.active span {
+  color: #d9bd78;
 }
 
 .accounting-sale-form {

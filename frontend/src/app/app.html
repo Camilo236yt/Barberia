@@ -420,6 +420,26 @@
           </button>
         </div>
 
+        <nav class="accounting-barber-tabs" aria-label="Filtrar contabilidad por barbero">
+          <button
+            type="button"
+            [class.active]="accountingBarberFilterId === 'all'"
+            (click)="selectAccountingBarberFilter('all')"
+          >
+            <span>Resumen</span>
+            <strong>General</strong>
+          </button>
+          <button
+            type="button"
+            *ngFor="let barber of barbers; trackBy: trackById"
+            [class.active]="accountingBarberFilterId === barber.id"
+            (click)="selectAccountingBarberFilter(barber.id)"
+          >
+            <span>Barbero</span>
+            <strong>{{ barber.name }}</strong>
+          </button>
+        </nav>
+
         <form class="tool-panel accounting-sale-form" *ngIf="accountingSaleFormOpen" (ngSubmit)="submitAccountingSale()">
           <div class="panel-heading">
             <div>
@@ -506,14 +526,14 @@
         </form>
 
         <div class="kpi-row">
-          <article class="kpi-card"><span>Total confirmado</span><strong>{{ formatMoney(accountingTotal()) }}</strong><small>{{ accountingDate }}</small></article>
-          <article class="kpi-card"><span>Efectivo</span><strong>{{ formatMoney(accountingCash()) }}</strong><small>Ventas del día elegido</small></article>
+          <article class="kpi-card"><span>Total confirmado</span><strong>{{ formatMoney(accountingTotal()) }}</strong><small>{{ accountingFilterLabel() }} · {{ accountingDate }}</small></article>
+          <article class="kpi-card"><span>Efectivo</span><strong>{{ formatMoney(accountingCash()) }}</strong><small>{{ accountingFilterLabel() }}</small></article>
           <article class="kpi-card"><span>Nequi confirmado</span><strong>{{ formatMoney(accountingNequi()) }}</strong><small>Pagos aprobados</small></article>
           <article class="kpi-card"><span>Nequi pendiente</span><strong>{{ formatMoney(accountingPendingTotal()) }}</strong><small>{{ accountingPendingSales().length }} por revisar</small></article>
         </div>
 
         <div class="accounting-grid">
-          <section class="tool-panel">
+          <section class="tool-panel" *ngIf="accountingBarberFilterId === 'all'">
             <div class="panel-heading">
               <div><p>Caja de hoy · {{ todayKey() }}</p><h2>Cierre de {{ activeBranch()?.name }}</h2></div>
               <span class="status-pill" [class.closed]="isCurrentDayClosed()" [class.online]="!isCurrentDayClosed()">
@@ -600,7 +620,7 @@
 
           <section class="tool-panel full-span">
             <div class="panel-heading">
-              <div><p>Movimientos diarios</p><h2>{{ accountingDate }} · {{ activeBranch()?.name }}</h2></div>
+              <div><p>Movimientos diarios · {{ accountingFilterLabel() }}</p><h2>{{ accountingDate }} · {{ activeBranch()?.name }}</h2></div>
               <span class="status-pill">{{ accountingSales().length }} registros</span>
             </div>
             <p
@@ -665,7 +685,7 @@
 
           <section class="tool-panel full-span">
             <div class="panel-heading">
-              <div><p>Liquidación · {{ accountingDate }}</p><h2>Cuánto pagar a cada barbero</h2></div>
+              <div><p>Liquidación · {{ accountingDate }}</p><h2>{{ accountingBarberFilterId === 'all' ? 'Cuánto pagar a cada barbero' : 'Cuenta individual de ' + accountingFilterLabel() }}</h2></div>
               <span class="status-pill">{{ accountingConfirmedSales().length }} ventas confirmadas</span>
             </div>
             <div class="payout-summary">
@@ -675,7 +695,7 @@
               <div><span>Para la barbería del efectivo</span><strong>{{ formatMoney(accountingCashShopShareTotal()) }}</strong></div>
             </div>
             <div class="barber-totals payout-grid">
-              <article class="barber-total-card payout-card" *ngFor="let barber of barbers; trackBy: trackById">
+              <article class="barber-total-card payout-card" *ngFor="let barber of accountingVisibleBarbers(); trackBy: trackById">
                 <div class="payout-card-header">
                   <div><span>Barbero</span><strong>{{ barber.name }}</strong></div>
                   <span class="status-pill">{{ commissionPercent(barber.id) }}% para él</span>
@@ -700,9 +720,9 @@
           <section class="tool-panel full-span expense-panel">
             <div class="panel-heading">
               <div><p>Gastos y descuentos · {{ accountingDate }}</p><h2>Movimientos que se deben restar</h2></div>
-              <span class="status-pill">{{ accountingExpenses().length }} registros</span>
+              <span class="status-pill">{{ accountingVisibleExpenses().length }} registros</span>
             </div>
-            <div class="expense-summary">
+            <div class="expense-summary" *ngIf="accountingBarberFilterId === 'all'; else barberExpenseSummary">
               <div><span>Parte bruta de la barbería</span><strong>{{ formatMoney(accountingShopShare()) }}</strong></div>
               <div><span>Gastos propios de la barbería</span><strong>− {{ formatMoney(accountingShopExpenseTotal()) }}</strong></div>
               <div><span>Descuentos a barberos</span><strong>+ {{ formatMoney(accountingBarberDeductionTotal()) }}</strong></div>
@@ -711,10 +731,20 @@
                 <strong>{{ formatMoney(accountingShopNetAfterExpenses()) }}</strong>
               </div>
             </div>
+            <ng-template #barberExpenseSummary>
+              <div class="expense-summary barber-expense-summary">
+                <div><span>Comisión y propina</span><strong>{{ formatMoney(accountingBarberCommission(accountingBarberFilterId)) }}</strong></div>
+                <div><span>Descuentos del barbero</span><strong>− {{ formatMoney(accountingBarberDeductionTotal(accountingBarberFilterId)) }}</strong></div>
+                <div [class.negative]="accountingBarberNet(accountingBarberFilterId) < 0">
+                  <span>Pago final a {{ accountingFilterLabel() }}</span>
+                  <strong>{{ formatMoney(accountingBarberNet(accountingBarberFilterId)) }}</strong>
+                </div>
+              </div>
+            </ng-template>
             <form class="expense-form" (ngSubmit)="createExpense()">
               <label class="field">
                 <span>Tipo</span>
-                <select name="expenseType" [(ngModel)]="newExpense.expense_type">
+                <select name="expenseType" [(ngModel)]="newExpense.expense_type" [disabled]="accountingBarberFilterId !== 'all'">
                   <option value="shop">Gasto de la barbería</option>
                   <option value="barber">Descuento a un barbero</option>
                 </select>
@@ -729,7 +759,7 @@
               </label>
               <label class="field" *ngIf="newExpense.expense_type === 'barber'">
                 <span>Descontar a</span>
-                <select name="expenseBarber" [(ngModel)]="newExpense.barber_id" required>
+                <select name="expenseBarber" [(ngModel)]="newExpense.barber_id" [disabled]="accountingBarberFilterId !== 'all'" required>
                   <option value="">Selecciona el barbero</option>
                   <option *ngFor="let barber of barbers; trackBy: trackById" [value]="barber.id">{{ barber.name }}</option>
                 </select>
@@ -739,8 +769,8 @@
               </button>
             </form>
             <p class="form-message" [class.success]="expenseMessageType === 'success'" [class.error]="expenseMessageType === 'error'">{{ expenseMessage }}</p>
-            <div class="expense-list" *ngIf="accountingExpenses().length; else noExpenses">
-              <article *ngFor="let expense of accountingExpenses(); trackBy: trackById">
+            <div class="expense-list" *ngIf="accountingVisibleExpenses().length; else noExpenses">
+              <article *ngFor="let expense of accountingVisibleExpenses(); trackBy: trackById">
                 <div>
                   <strong>{{ expense.description }}</strong>
                   <small>
@@ -752,7 +782,7 @@
                 <button class="small-button reject" type="button" (click)="deleteExpense(expense)">Eliminar</button>
               </article>
             </div>
-            <ng-template #noExpenses><div class="empty-state">No hay gastos registrados en este día</div></ng-template>
+            <ng-template #noExpenses><div class="empty-state">No hay gastos o descuentos para este filtro</div></ng-template>
           </section>
         </div>
       </section>
