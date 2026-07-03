@@ -22,6 +22,7 @@ $RemoteRef = "refs/remotes/$Remote/$Branch"
 $ArchiveDirectory = Join-Path $AppRoot "data\history-archives"
 $StatusPath = Join-Path $AppRoot "data\history-backup-status.json"
 $UploadIndexPath = Join-Path $AppRoot "data\history-upload-index.json"
+$InstallationIdPath = Join-Path $AppRoot "data\installation-id.txt"
 $PortableGit = Join-Path $env:LOCALAPPDATA "CapitanGold\Git\cmd\git.exe"
 $GitExe = if (Test-Path -LiteralPath $PortableGit) {
   $PortableGit
@@ -45,6 +46,22 @@ if ($Month -and $Month -notmatch "^\d{4}-\d{2}$") {
 if ($Date -and $Date -notmatch "^\d{4}-\d{2}-\d{2}$") {
   throw "La fecha debe tener el formato AAAA-MM-DD."
 }
+
+function Get-InstallationId {
+  if (Test-Path -LiteralPath $InstallationIdPath) {
+    $saved = (Get-Content -LiteralPath $InstallationIdPath -Raw).Trim().ToLowerInvariant()
+    if ($saved -match "^pc-[a-f0-9]{12}$") {
+      return $saved
+    }
+  }
+  $parent = Split-Path -Parent $InstallationIdPath
+  New-Item -ItemType Directory -Path $parent -Force | Out-Null
+  $created = "pc-" + [guid]::NewGuid().ToString("N").Substring(0, 12)
+  Set-Content -LiteralPath $InstallationIdPath -Value $created -Encoding ASCII
+  return $created
+}
+
+$InstallationId = Get-InstallationId
 
 function Invoke-Git($Arguments, [switch]$AllowFailure) {
   $previousPreference = $ErrorActionPreference
@@ -148,6 +165,22 @@ function Export-GitBlob($ObjectSpec, $Destination) {
   }
 }
 
+function Get-FriendlyGitMessage($Message) {
+  $text = "$Message"
+  if (
+    $text -match "Authentication failed|could not read Username|terminal prompts disabled|" +
+      "interactiv.*disabled|GCM_INTERACTIVE|permission denied|write access.*not granted|" +
+      "HTTP 403|returned error: 403|repository not found"
+  ) {
+    return (
+      "Este PC todavia no esta autorizado para guardar respaldos en GitHub. " +
+      "Ejecuta 'Configurar GitHub.cmd' una vez e inicia sesion con una cuenta que tenga " +
+      "permiso de escritura en el repositorio."
+    )
+  }
+  return $text
+}
+
 try {
   if ($Action -eq "List") {
     if (-not (Fetch-HistoryBranch)) {
@@ -158,7 +191,7 @@ try {
     $months = @(
       $tree.Lines |
         ForEach-Object {
-          if ("$_" -match "^meses/(\d{4}-\d{2})/\d{4}-\d{2}-\d{2}\.zip$") { $Matches[1] }
+          if ("$_" -match "^meses/(\d{4}-\d{2})/\d{4}-\d{2}-\d{2}(?:-pc-[a-f0-9]{12})?\.zip$") { $Matches[1] }
         } |
         Where-Object { $_ } |
         Sort-Object -Descending -Unique
@@ -178,7 +211,10 @@ try {
     }
     $tree = Invoke-Git @("ls-tree", "-r", "--name-only", $RemoteRef, "meses/$Month")
     $remoteFiles = @(
-      $tree.Lines | Where-Object { "$_" -match "^meses/$Month/\d{4}-\d{2}-\d{2}\.zip$" }
+      $tree.Lines |
+        Where-Object {
+          "$_" -match "^meses/$Month/\d{4}-\d{2}-\d{2}(?:-pc-[a-f0-9]{12})?\.zip$"
+        }
     )
     if (-not $remoteFiles.Count) {
       throw "No existe un respaldo remoto para $Month."
@@ -205,51 +241,82 @@ try {
   }
 
   Set-BackupStatus "uploading" "Subiendo el historial a GitHub."
-  $hasRemoteBranch = Fetch-HistoryBranch
+  $blobResult = Invoke-Git @("hash-object", "-w", $archivePath)
+  $blob = @($blobResult.Lines | Where-Object { "$_" -match "^[0-9a-f]{40,64}$" })[-1]
+  if (-not $blob) {
+    throw "Git no devolvio el identificador del archivo de respaldo."
+  }
+
   $temporaryIndex = Join-Path $env:TEMP ("capitan-gold-index-" + [guid]::NewGuid().ToString("N"))
   $previousIndex = $env:GIT_INDEX_FILE
+  $commit = ""
+  $uploaded = $false
   try {
     $env:GIT_INDEX_FILE = $temporaryIndex
-    if ($hasRemoteBranch) {
-      Invoke-Git @("read-tree", $RemoteRef) | Out-Null
-    } else {
-      Invoke-Git @("read-tree", "--empty") | Out-Null
-    }
-    $blobResult = Invoke-Git @("hash-object", "-w", $archivePath)
-    $blob = @($blobResult.Lines | Where-Object { "$_" -match "^[0-9a-f]{40,64}$" })[-1]
-    if (-not $blob) {
-      throw "Git no devolvio el identificador del archivo de respaldo."
-    }
-    Invoke-Git @(
-      "update-index", "--add", "--cacheinfo",
-      "100644,$blob,meses/$Month/$Date.zip"
-    ) | Out-Null
-    $tree = (Invoke-Git @("write-tree")).Text
-
     $env:GIT_AUTHOR_NAME = "Capitan Gold"
     $env:GIT_AUTHOR_EMAIL = "respaldos@capitangold.local"
     $env:GIT_COMMITTER_NAME = "Capitan Gold"
     $env:GIT_COMMITTER_EMAIL = "respaldos@capitangold.local"
-    $commitArguments = @("commit-tree", $tree, "-m", "Respaldo automatico $Date")
-    if ($hasRemoteBranch) {
-      $parent = (Invoke-Git @("rev-parse", $RemoteRef)).Text
-      $commitArguments += @("-p", $parent)
+
+    for ($attempt = 1; $attempt -le 4; $attempt++) {
+      $hasRemoteBranch = Fetch-HistoryBranch
+      if ($hasRemoteBranch) {
+        Invoke-Git @("read-tree", $RemoteRef) | Out-Null
+      } else {
+        Invoke-Git @("read-tree", "--empty") | Out-Null
+      }
+      Invoke-Git @(
+        "update-index", "--add", "--cacheinfo",
+        "100644,$blob,meses/$Month/$Date-$InstallationId.zip"
+      ) | Out-Null
+      $tree = (Invoke-Git @("write-tree")).Text
+
+      $commitArguments = @(
+        "commit-tree", $tree, "-m", "Respaldo automatico $Date ($InstallationId)"
+      )
+      if ($hasRemoteBranch) {
+        $parent = (Invoke-Git @("rev-parse", $RemoteRef)).Text
+        $commitArguments += @("-p", $parent)
+      }
+      $commit = (Invoke-Git $commitArguments).Text
+      $pushResult = Invoke-Git @(
+        "push", "--quiet", $Remote, "$commit`:refs/heads/$Branch"
+      ) -AllowFailure
+      if ($pushResult.ExitCode -eq 0) {
+        $uploaded = $true
+        break
+      }
+      if (
+        $attempt -lt 4 -and
+        $pushResult.Text -match "non-fast-forward|fetch first|stale info|rejected"
+      ) {
+        Start-Sleep -Milliseconds (250 * $attempt)
+        continue
+      }
+      throw $pushResult.Text
     }
-    $commit = (Invoke-Git $commitArguments).Text
-    Invoke-Git @("push", "--quiet", $Remote, "$commit`:refs/heads/$Branch") | Out-Null
   } finally {
     $env:GIT_INDEX_FILE = $previousIndex
     Remove-Item -LiteralPath $temporaryIndex -Force -ErrorAction SilentlyContinue
   }
+  if (-not $uploaded) {
+    throw "GitHub rechazo el respaldo despues de varios intentos."
+  }
 
   Set-UploadedDate $commit
-  Set-BackupStatus "success" "Historial $Date respaldado en GitHub."
-  [pscustomobject]@{ ok = $true; month = $Month; date = $Date } | ConvertTo-Json -Compress
+  Set-BackupStatus "success" "Historial $Date respaldado en GitHub desde $InstallationId."
+  [pscustomobject]@{
+    ok = $true
+    month = $Month
+    date = $Date
+    installation = $InstallationId
+  } | ConvertTo-Json -Compress
   exit 0
 } catch {
+  $friendlyMessage = Get-FriendlyGitMessage $_.Exception.Message
   if ($Action -eq "Upload") {
-    Set-BackupStatus "error" $_.Exception.Message
+    Set-BackupStatus "error" $friendlyMessage
   }
-  [Console]::Error.WriteLine($_.Exception.Message)
+  [Console]::Error.WriteLine($friendlyMessage)
   exit 1
 }

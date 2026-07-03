@@ -243,6 +243,7 @@ export class App implements OnInit, OnDestroy {
   localHistoryMonths: string[] = [];
   remoteHistoryMonths: string[] = [];
   historyBackupLoading = false;
+  historyUploadLoading = false;
   historyBackupMessage = '';
   historyBackupMessageType: 'success' | 'error' | '' = '';
   historyActionMessage = '';
@@ -262,6 +263,7 @@ export class App implements OnInit, OnDestroy {
   backupProgressState: 'queued' | 'uploading' | 'success' | 'error' = 'queued';
   backupProgressMessage = '';
   backupTargetDate = '';
+  backupProgressContext: 'close' | 'reopen' | 'manual' = 'close';
 
   saleForm = {
     barber_id: '',
@@ -899,7 +901,7 @@ export class App implements OnInit, OnDestroy {
         `Caja de ${this.activeBranch()?.name} cerrada. El respaldo de GitHub se está enviando en segundo plano.`,
         'success',
       );
-      this.startBackupProgress(result.backup_date || this.todayKey());
+      this.startBackupProgress(result.backup_date || this.todayKey(), 'close');
       await this.loadData(true);
     } catch (error) {
       this.showCloseMessage(this.errorMessage(error), 'error');
@@ -914,16 +916,20 @@ export class App implements OnInit, OnDestroy {
         body: JSON.stringify({ branch_id: this.activeBranchId }),
       });
       this.showCloseMessage('Caja reabierta. Actualizando el respaldo de GitHub.', 'success');
-      this.startBackupProgress(result.backup_date || this.todayKey());
+      this.startBackupProgress(result.backup_date || this.todayKey(), 'reopen');
       await this.loadData(true);
     } catch (error) {
       this.showCloseMessage(this.errorMessage(error), 'error');
     }
   }
 
-  private startBackupProgress(dateKey: string): void {
+  private startBackupProgress(
+    dateKey: string,
+    context: 'close' | 'reopen' | 'manual',
+  ): void {
     if (this.backupStatusTimer) window.clearInterval(this.backupStatusTimer);
     this.backupTargetDate = dateKey;
+    this.backupProgressContext = context;
     this.backupProgressVisible = true;
     this.backupProgressState = 'queued';
     this.backupProgress = 15;
@@ -959,15 +965,28 @@ export class App implements OnInit, OnDestroy {
         this.backupProgress = 100;
         this.backupProgressMessage =
           status.message || 'El respaldo se subió correctamente a GitHub.';
-        this.closeMessage = `Caja de ${this.activeBranch()?.name} cerrada y respaldada correctamente en GitHub.`;
-        this.closeMessageType = 'success';
+        if (this.backupProgressContext === 'manual') {
+          this.historyBackupMessage = `Los datos del ${this.backupTargetDate} se subieron correctamente a GitHub.`;
+          this.historyBackupMessageType = 'success';
+        } else {
+          this.closeMessage =
+            this.backupProgressContext === 'reopen'
+              ? 'La caja quedó reabierta y el respaldo se actualizó correctamente en GitHub.'
+              : `Caja de ${this.activeBranch()?.name} cerrada y respaldada correctamente en GitHub.`;
+          this.closeMessageType = 'success';
+        }
         this.stopBackupProgressPolling();
       } else if (status.state === 'error') {
         this.backupProgressState = 'error';
         this.backupProgress = 100;
         this.backupProgressMessage = status.message || 'GitHub rechazó el respaldo.';
-        this.closeMessage = `La caja quedó guardada localmente, pero el respaldo de GitHub falló: ${this.backupProgressMessage}`;
-        this.closeMessageType = 'error';
+        if (this.backupProgressContext === 'manual') {
+          this.historyBackupMessage = `No se pudieron subir los datos: ${this.backupProgressMessage}`;
+          this.historyBackupMessageType = 'error';
+        } else {
+          this.closeMessage = `La caja quedó guardada localmente, pero el respaldo de GitHub falló: ${this.backupProgressMessage}`;
+          this.closeMessageType = 'error';
+        }
         this.stopBackupProgressPolling();
       } else {
         this.backupProgressState = 'queued';
@@ -979,9 +998,14 @@ export class App implements OnInit, OnDestroy {
       this.backupProgressState = 'error';
       this.backupProgress = 100;
       this.backupProgressMessage = this.errorMessage(error);
-      this.closeMessage =
-        'La caja quedó guardada localmente, pero no se pudo consultar el respaldo.';
-      this.closeMessageType = 'error';
+      if (this.backupProgressContext === 'manual') {
+        this.historyBackupMessage = `No se pudo consultar el estado del respaldo: ${this.backupProgressMessage}`;
+        this.historyBackupMessageType = 'error';
+      } else {
+        this.closeMessage =
+          'La caja quedó guardada localmente, pero no se pudo consultar el respaldo.';
+        this.closeMessageType = 'error';
+      }
       this.stopBackupProgressPolling();
     } finally {
       this.backupStatusBusy = false;
@@ -1678,6 +1702,46 @@ export class App implements OnInit, OnDestroy {
       this.historyBackupLoading = false;
       this.renderNow();
     }
+  }
+
+  async uploadTodayHistory(): Promise<void> {
+    if (this.historyUploadLoading || this.backupIsRunning()) return;
+    this.historyUploadLoading = true;
+    this.historyBackupMessage = 'Preparando todos los datos de hoy...';
+    this.historyBackupMessageType = '';
+    this.renderNow();
+    try {
+      const result = await this.api<{ backup_date?: string; message?: string }>(
+        '/api/history-backups/upload',
+        {
+          method: 'POST',
+          body: JSON.stringify({}),
+        },
+      );
+      const dateKey = result.backup_date || this.todayKey();
+      this.historyBackupMessage =
+        result.message || `Datos del ${dateKey} preparados para subir a GitHub.`;
+      this.startBackupProgress(dateKey, 'manual');
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.backupProgressContext = 'manual';
+      this.backupProgressVisible = true;
+      this.backupProgressState = 'error';
+      this.backupProgress = 100;
+      this.backupProgressMessage = message;
+      this.historyBackupMessage = `No se pudo preparar el respaldo: ${message}`;
+      this.historyBackupMessageType = 'error';
+    } finally {
+      this.historyUploadLoading = false;
+      this.renderNow();
+    }
+  }
+
+  backupIsRunning(): boolean {
+    return (
+      this.backupProgressVisible &&
+      (this.backupProgressState === 'queued' || this.backupProgressState === 'uploading')
+    );
   }
 
   async downloadHistoryMonth(month: string): Promise<void> {

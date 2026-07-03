@@ -720,7 +720,7 @@ def read_history_archive(path):
 
 def restore_history_proofs(month_key):
     UPLOAD_DIR.mkdir(exist_ok=True)
-    for archive_path in HISTORY_ARCHIVE_DIR.glob(f"{month_key}-??.zip"):
+    for archive_path in HISTORY_ARCHIVE_DIR.glob(f"{month_key}-??*.zip"):
         with zipfile.ZipFile(archive_path, "r") as archive:
             for member in archive.infolist():
                 member_path = Path(member.filename)
@@ -903,7 +903,8 @@ def queue_history_backup(date_key):
 
 def history_backup_summary():
     local_months = sorted(
-        {path.stem[:7] for path in HISTORY_ARCHIVE_DIR.glob("????-??-??.zip")}, reverse=True
+        {path.stem[:7] for path in HISTORY_ARCHIVE_DIR.glob("????-??-??*.zip")},
+        reverse=True,
     )
     remote_months = []
     remote_error = ""
@@ -1337,6 +1338,12 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 restore_history_proofs(month_key)
                 publish_data_change()
                 self.send_json(result)
+                return
+            if path == "/api/history-backups/upload":
+                role = self.require_admin_role()
+                if not role or not self.branch_scope(role):
+                    return
+                self.upload_history_backup()
                 return
         except json.JSONDecodeError:
             self.send_json({"error": "JSON invalido."}, 400)
@@ -1914,6 +1921,27 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             publish_data_change()
             queue_history_backup(date_key)
             self.send_json({"closure": closure, "backup_date": date_key})
+
+    def upload_history_backup(self):
+        date_key = today_key()
+        branch_id = self.headers.get("X-Branch-Id")
+
+        with LOCK:
+            db = read_db()
+            branch = find_by_id(db["branches"], branch_id)
+            if not branch or not branch.get("active", True):
+                raise ValueError("Selecciona una barberia valida.")
+            write_history_archive(db, date_key)
+
+        queue_history_backup(date_key)
+        self.send_json(
+            {
+                "ok": True,
+                "backup_date": date_key,
+                "message": "Los datos de hoy estan preparados para subir a GitHub.",
+            },
+            202,
+        )
 
     def reopen_day(self):
         payload = self.read_json_body()

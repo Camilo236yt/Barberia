@@ -727,17 +727,67 @@
               <p>Copia de seguridad selectiva</p>
               <h2>Historial guardado en GitHub</h2>
             </div>
-            <button class="secondary-button" type="button" [disabled]="historyBackupLoading" (click)="loadHistoryBackups()">
-              {{ historyBackupLoading ? 'Consultando...' : 'Buscar respaldos' }}
-            </button>
+            <div class="history-backup-actions">
+              <button
+                class="primary-button"
+                type="button"
+                [disabled]="historyBackupLoading || historyUploadLoading || backupIsRunning()"
+                (click)="uploadTodayHistory()"
+              >
+                {{ historyUploadLoading ? 'Preparando...' : backupIsRunning() ? 'Subiendo...' : 'Subir datos de hoy' }}
+              </button>
+              <button
+                class="secondary-button"
+                type="button"
+                [disabled]="historyBackupLoading || historyUploadLoading || backupIsRunning()"
+                (click)="loadHistoryBackups()"
+              >
+                {{ historyBackupLoading ? 'Consultando...' : 'Buscar respaldos' }}
+              </button>
+            </div>
           </div>
-          <p class="backup-explanation">Los meses anteriores no ocupan espacio en una instalación nueva. Descarga únicamente el mes que necesites consultar.</p>
+          <p class="backup-explanation">Usa “Subir datos de hoy” para guardar en GitHub sin cerrar ni reabrir la barbería. Los meses anteriores solo se descargan cuando necesites consultarlos.</p>
+          <div
+            class="backup-progress-card history-backup-progress"
+            *ngIf="backupProgressVisible"
+            [class.success]="backupProgressState === 'success'"
+            [class.error]="backupProgressState === 'error'"
+          >
+            <div class="backup-progress-heading">
+              <strong>
+                {{
+                  backupProgressState === 'success'
+                    ? 'Respaldo completado'
+                    : backupProgressState === 'error'
+                      ? 'Error en el respaldo'
+                      : backupProgressState === 'uploading'
+                        ? 'Subiendo datos a GitHub'
+                        : 'Preparando los datos'
+                }}
+              </strong>
+              <span>{{ backupProgress }}%</span>
+            </div>
+            <div
+              class="backup-progress-track"
+              role="progressbar"
+              aria-label="Progreso del respaldo manual de GitHub"
+              [attr.aria-valuenow]="backupProgress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <i
+                [class.active]="backupProgressState === 'queued' || backupProgressState === 'uploading'"
+                [style.width.%]="backupProgress"
+              ></i>
+            </div>
+            <p>{{ backupProgressMessage }}</p>
+          </div>
           <div class="history-month-buttons" *ngIf="remoteHistoryMonths.length">
             <button
               type="button"
               *ngFor="let month of remoteHistoryMonths"
               [class.downloaded]="historyMonthIsLocal(month)"
-              [disabled]="historyBackupLoading || historyMonthIsLocal(month)"
+              [disabled]="historyBackupLoading || historyUploadLoading || backupIsRunning() || historyMonthIsLocal(month)"
               (click)="downloadHistoryMonth(month)"
             >
               <strong>{{ month }}</strong>

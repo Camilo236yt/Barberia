@@ -129,7 +129,27 @@ Al cerrar o reabrir una caja, el servidor crea `data/history-archives/AAAA-MM-DD
 
 En `Historial > Buscar respaldos` aparecen los meses disponibles. Un mes remoto solo se descarga cuando el administrador pulsa `Descargar`; entonces sus cierres aparecen en el calendario y sus comprobantes vuelven a estar disponibles.
 
-El repositorio debe ser privado y la cuenta configurada en Git debe tener permiso de escritura. Si no hay conexión o autenticación, el ZIP permanece local y la pantalla muestra el estado del respaldo.
+Cada instalación usa un identificador propio en el nombre remoto del ZIP. Así, dos
+computadores pueden respaldar el mismo día sin reemplazar los datos del otro. Si
+ambos envían al mismo tiempo, el programa actualiza la rama y vuelve a intentarlo
+automáticamente.
+
+En cada PC que guarde su propia contabilidad, ejecuta una sola vez:
+
+```text
+Configurar GitHub.cmd
+```
+
+Se abrirá el acceso seguro de GitHub y la autorización quedará cifrada en el
+usuario de Windows. Debe usarse una cuenta con permiso de escritura en el
+repositorio privado `Camilo236yt/Barberia`; no se guarda ninguna contraseña
+dentro del programa. Si todos los equipos se conectan a un único servidor de
+Capitan Gold, solo ese computador principal necesita esta configuración.
+
+Si no hay conexión o autenticación, el ZIP permanece local y la pantalla muestra
+el error junto con la instrucción para configurar GitHub. Al descargar un mes,
+el sistema combina los respaldos de todos los computadores y elimina registros
+duplicados por su identificador.
 
 ## Seguridad
 

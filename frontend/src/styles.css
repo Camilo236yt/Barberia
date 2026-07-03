@@ -2477,6 +2477,21 @@ body {
   font-size: 0.82rem;
 }
 
+.history-backup-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.history-backup-actions .primary-button {
+  width: auto;
+}
+
+.history-backup-progress {
+  margin: 0 0 14px;
+}
+
 .history-month-buttons {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -2509,6 +2524,23 @@ body {
 
 .history-month-buttons button.downloaded span {
   color: var(--green);
+}
+
+@media (max-width: 760px) {
+  .history-backup-panel .panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .history-backup-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .history-backup-actions .primary-button,
+  .history-backup-actions .secondary-button {
+    width: 100%;
+  }
 }
 
 .history-list-panel {
