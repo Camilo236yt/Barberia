@@ -559,6 +559,12 @@ try {
     exit 0
   }
 
+  if ($Internet) {
+    $env:CAPITAN_GOLD_INTERNET = "1"
+  } else {
+    Remove-Item Env:CAPITAN_GOLD_INTERNET -ErrorAction SilentlyContinue
+  }
+
   $serverProcess = $null
   if (-not $listener) {
     Write-Step "Iniciando servidor..."
@@ -667,7 +673,11 @@ try {
     if (-not $NoBrowser) {
       Start-Process $LocalAdminUrl
     }
-    Write-Step "Al cerrar la pestaña local se apagara tambien esta ventana."
+    Write-Step $(if ($Internet) {
+      "Modo Internet activo. Para apagar el servidor, cierra esta ventana."
+    } else {
+      "Al cerrar la pestaña local se apagara tambien esta ventana."
+    })
     while (Get-PortListener) {
       if ($serverProcess -and $serverProcess.HasExited) {
         break

@@ -1715,7 +1715,6 @@ export class App implements OnInit, OnDestroy {
         '/api/history-backups/upload',
         {
           method: 'POST',
-          body: JSON.stringify({}),
         },
       );
       const dateKey = result.backup_date || this.todayKey();

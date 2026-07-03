@@ -29,6 +29,7 @@ HISTORY_BACKUP_STATUS_PATH = DATA_DIR / "history-backup-status.json"
 HISTORY_UPLOAD_INDEX_PATH = DATA_DIR / "history-upload-index.json"
 HISTORY_BACKUP_SCRIPT = ROOT / "tools" / "backup-history.ps1"
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
+INTERNET_MODE = os.environ.get("CAPITAN_GOLD_INTERNET", "").strip() == "1"
 
 LOCK = threading.Lock()
 EVENT_CONDITION = threading.Condition()
@@ -943,6 +944,8 @@ def update_local_ui_session(session_id, closing=False):
 def monitor_local_ui(server):
     while True:
         time.sleep(0.5)
+        if INTERNET_MODE:
+            continue
         now = time.monotonic()
         with LOCAL_UI_SESSION_LOCK:
             if not LOCAL_UI_MONITOR_ARMED:
@@ -1960,6 +1963,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             self.send_json({"closure": closure, "backup_date": date_key})
 
     def upload_history_backup(self):
+        # Consumir el cuerpo del POST evita que "{}" quede pendiente en una
+        # conexión keep-alive y convierta el siguiente GET en el método "{}GET".
+        self.read_json_body()
         date_key = today_key()
         branch_id = self.headers.get("X-Branch-Id")
 
