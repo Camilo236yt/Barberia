@@ -241,6 +241,86 @@ function Initialize-NgrokConfiguration([switch]$Force) {
   return [pscustomobject]@{ Token = ""; Source = "profile" }
 }
 
+function Invoke-Ngrok($Arguments, [switch]$AllowFailure) {
+  $previousPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $lines = @(& $NgrokExe @Arguments 2>&1)
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  $text = (($lines | ForEach-Object { "$_" }) -join [Environment]::NewLine).Trim()
+  if ($exitCode -ne 0 -and -not $AllowFailure) {
+    throw $(if ($text) { $text } else { "ngrok termino con el codigo $exitCode." })
+  }
+  return [pscustomobject]@{ ExitCode = $exitCode; Text = $text }
+}
+
+function Initialize-NgrokApiConfiguration {
+  $test = Invoke-Ngrok @("api", "tunnel-sessions", "list", "--limit", "1") -AllowFailure
+  if ($test.ExitCode -eq 0) {
+    return
+  }
+
+  Write-Host ""
+  Write-Step "Para cerrar la sesion remota anterior, ngrok necesita su API key una sola vez."
+  Write-Step "Se abrira la pagina oficial. Copia la API key, no el authtoken."
+  try {
+    Start-Process "https://dashboard.ngrok.com/api"
+  } catch {
+  }
+  $apiKey = (Read-SecretText "Pega la API key de ngrok y presiona Enter").Trim()
+  if ($apiKey.Length -lt 20 -or $apiKey -match "\s") {
+    throw "La API key de ngrok esta vacia o no tiene un formato valido."
+  }
+  try {
+    $saved = Invoke-Ngrok @("config", "add-api-key", $apiKey) -AllowFailure
+  } finally {
+    $apiKey = $null
+  }
+  if ($saved.ExitCode -ne 0) {
+    throw "ngrok no pudo guardar la API key: $($saved.Text)"
+  }
+  $test = Invoke-Ngrok @("api", "tunnel-sessions", "list", "--limit", "1") -AllowFailure
+  if ($test.ExitCode -ne 0) {
+    throw "ngrok no pudo validar la API key."
+  }
+}
+
+function Stop-RemoteNgrokEndpoint($EndpointUrl) {
+  Initialize-NgrokApiConfiguration
+  Write-Step "Cerrando la sesion remota anterior de ngrok..."
+
+  $listResult = Invoke-Ngrok @("api", "endpoints", "list") -AllowFailure
+  if ($listResult.ExitCode -ne 0) {
+    throw "No se pudieron consultar las sesiones de ngrok: $($listResult.Text)"
+  }
+  try {
+    $endpointList = $listResult.Text | ConvertFrom-Json
+  } catch {
+    throw "ngrok devolvio una lista de sesiones no valida."
+  }
+  $targetUrl = "$EndpointUrl".TrimEnd("/")
+  $sessionIds = @(
+    @($endpointList.endpoints) |
+      Where-Object { "$($_.url)".TrimEnd("/") -eq $targetUrl } |
+      ForEach-Object { $_.tunnel_session.id } |
+      Where-Object { $_ } |
+      Sort-Object -Unique
+  )
+  if (-not $sessionIds.Count) {
+    throw "No se encontro la sesion que mantiene ocupado $targetUrl."
+  }
+  foreach ($sessionId in $sessionIds) {
+    $stopResult = Invoke-Ngrok @("api", "tunnel-sessions", "stop", "$sessionId") -AllowFailure
+    if ($stopResult.ExitCode -ne 0) {
+      throw "No se pudo cerrar la sesion anterior de ngrok: $($stopResult.Text)"
+    }
+  }
+  Start-Sleep -Seconds 2
+}
+
 function Find-NgrokEndpointProcess {
   $expectedPath = [System.IO.Path]::GetFullPath($NgrokExe)
   $matches = @()
@@ -257,11 +337,114 @@ function Find-NgrokEndpointProcess {
       )
       $matches += [pscustomobject]@{
         Process = Get-Process -Id $processInfo.ProcessId -ErrorAction SilentlyContinue
+        ParentProcessId = $processInfo.ParentProcessId
         IsOrphan = -not $parentIsRunning
       }
     }
   }
   return @($matches | Where-Object { $_.Process })
+}
+
+function Test-AppLauncherProcess($ProcessId) {
+  if (-not $ProcessId -or $ProcessId -eq $PID) {
+    return $false
+  }
+  $processInfo = Get-CimInstance Win32_Process `
+    -Filter "ProcessId = $ProcessId" `
+    -ErrorAction SilentlyContinue
+  if (-not $processInfo -or -not $processInfo.CommandLine) {
+    return $false
+  }
+  $launcherPath = Join-Path $AppRoot "tools\start-barberia.ps1"
+  return $processInfo.CommandLine.IndexOf(
+    $launcherPath,
+    [StringComparison]::OrdinalIgnoreCase
+  ) -ge 0
+}
+
+function Test-AppServerProcess($ProcessId, $PythonFile) {
+  if (-not $ProcessId) {
+    return $false
+  }
+  $processInfo = Get-CimInstance Win32_Process `
+    -Filter "ProcessId = $ProcessId" `
+    -ErrorAction SilentlyContinue
+  if (
+    -not $processInfo -or
+    -not $processInfo.ExecutablePath -or
+    -not $processInfo.CommandLine -or
+    $processInfo.CommandLine -notmatch "(^|[\\/\s`"'])server\.py([`"'\s]|$)"
+  ) {
+    return $false
+  }
+  try {
+    $processPath = [System.IO.Path]::GetFullPath($processInfo.ExecutablePath)
+    $expectedPython = [System.IO.Path]::GetFullPath($PythonFile)
+    $normalizedRoot = [System.IO.Path]::GetFullPath($AppRoot).TrimEnd("\") + "\"
+    $usesAppPython = (
+      $processPath.Equals($expectedPython, [StringComparison]::OrdinalIgnoreCase) -and
+      $expectedPython.StartsWith($normalizedRoot, [StringComparison]::OrdinalIgnoreCase)
+    )
+    $mentionsAppRoot = $processInfo.CommandLine.IndexOf(
+      $AppRoot,
+      [StringComparison]::OrdinalIgnoreCase
+    ) -ge 0
+    $hasAppLauncher = Test-AppLauncherProcess $processInfo.ParentProcessId
+    return $usesAppPython -or $mentionsAppRoot -or $hasAppLauncher
+  } catch {
+    return $false
+  }
+}
+
+function Stop-PreviousInternetSession($PythonFile) {
+  $existingTunnels = @(Find-NgrokEndpointProcess)
+  $launcherIds = @(
+    $existingTunnels |
+      ForEach-Object { $_.ParentProcessId } |
+      Where-Object { $_ -and $_ -ne $PID } |
+      Sort-Object -Unique
+  )
+  $listener = Get-PortListener
+  $foundPreviousSession = $existingTunnels.Count -gt 0
+
+  if ($listener -and (Test-AppServerProcess $listener.OwningProcess $PythonFile)) {
+    $foundPreviousSession = $true
+    Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
+  }
+
+  if ($foundPreviousSession) {
+    Write-Step "Cerrando la sesion anterior para crear un enlace nuevo..."
+  }
+
+  # El iniciador anterior detecta el cierre del servidor y apaga su propio tunel.
+  for ($attempt = 0; $attempt -lt 12; $attempt++) {
+    if (-not (Get-PortListener) -and -not @(Find-NgrokEndpointProcess).Count) {
+      break
+    }
+    Start-Sleep -Milliseconds 250
+  }
+
+  foreach ($tunnel in @(Find-NgrokEndpointProcess)) {
+    if ($tunnel.ParentProcessId -and $tunnel.ParentProcessId -ne $PID) {
+      $launcherIds += $tunnel.ParentProcessId
+    }
+    Stop-Process -Id $tunnel.Process.Id -Force -ErrorAction SilentlyContinue
+  }
+
+  $listener = Get-PortListener
+  if ($listener -and (Test-AppServerProcess $listener.OwningProcess $PythonFile)) {
+    Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
+  }
+
+  Start-Sleep -Milliseconds 400
+  foreach ($launcherId in @($launcherIds | Sort-Object -Unique)) {
+    if (Test-AppLauncherProcess $launcherId) {
+      Stop-Process -Id $launcherId -Force -ErrorAction SilentlyContinue
+    }
+  }
+
+  Remove-Item -LiteralPath $NgrokPublicUrlPath -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $OnlineLinkPath -Force -ErrorAction SilentlyContinue
 }
 
 function Start-NgrokTunnel($StdoutLog, $StderrLog) {
@@ -362,7 +545,14 @@ try {
     throw "server.py contiene un error."
   }
 
+  if ($Internet -and -not $CheckOnly) {
+    Stop-PreviousInternetSession $python.File
+  }
+
   $listener = Get-PortListener
+  if ($Internet -and $listener -and -not $CheckOnly) {
+    throw "El puerto $Port sigue ocupado por otro programa y no se puede reiniciar el acceso online."
+  }
   if ($CheckOnly) {
     Show-Accesses $(Get-OnlineAdminLink)
     Write-Step $(if ($listener) { "El servidor ya esta activo." } else { "El sistema esta listo para iniciar." })
@@ -411,21 +601,9 @@ try {
       $stdoutLog = Join-Path $logDir "admin-online-out.log"
       $stderrLog = Join-Path $logDir "admin-online-err.log"
 
-      $existingTunnels = @(Find-NgrokEndpointProcess)
-      if ($existingTunnels.Count -gt 0) {
-        $existingTunnel = $existingTunnels[0]
-        $tunnelProcess = $existingTunnel.Process
-        $ownsTunnelProcess = $existingTunnel.IsOrphan
-        Write-Step $(if ($ownsTunnelProcess) {
-          "Recuperando una sesion anterior de ngrok que quedo abierta..."
-        } else {
-          "El enlace online ya esta activo en esta computadora; se reutilizara."
-        })
-      } else {
-        Write-Step "Creando el nuevo enlace administrativo online..."
-        $tunnelProcess = Start-NgrokTunnel $stdoutLog $stderrLog
-        $ownsTunnelProcess = $true
-      }
+      Write-Step "Creando el nuevo enlace administrativo online..."
+      $tunnelProcess = Start-NgrokTunnel $stdoutLog $stderrLog
+      $ownsTunnelProcess = $true
 
       $ngrokPublicUrl = Wait-NgrokPublicUrl $tunnelProcess
       if (-not $ngrokPublicUrl) {
@@ -434,10 +612,34 @@ try {
         } else {
           ""
         }
-        if ($ngrokError) {
-          throw "ngrok no pudo crear el enlace online: $ngrokError"
+        if ($ngrokError -match "ERR_NGROK_334") {
+          $busyEndpoint = [regex]::Match(
+            $ngrokError,
+            "https://[A-Za-z0-9.-]+"
+          ).Value
+          if (-not $busyEndpoint) {
+            throw "ngrok informo una sesion anterior, pero no indico cual enlace esta ocupado."
+          }
+          Stop-RemoteNgrokEndpoint $busyEndpoint
+          Write-Step "Creando nuevamente el enlace online..."
+          $tunnelProcess = Start-NgrokTunnel $stdoutLog $stderrLog
+          $ngrokPublicUrl = Wait-NgrokPublicUrl $tunnelProcess
+          if (-not $ngrokPublicUrl) {
+            $ngrokError = if (Test-Path -LiteralPath $stderrLog) {
+              ("$(Get-Content -LiteralPath $stderrLog -Raw)").Trim()
+            } else {
+              ""
+            }
+          }
         }
-        throw "ngrok no pudo crear el enlace online. Ejecuta Configurar Ngrok.cmd para renovar el acceso."
+        if ($ngrokError) {
+          if (-not $ngrokPublicUrl) {
+            throw "ngrok no pudo crear el enlace online: $ngrokError"
+          }
+        }
+        if (-not $ngrokPublicUrl) {
+          throw "ngrok no pudo crear el enlace online. Ejecuta Configurar Ngrok.cmd para renovar el acceso."
+        }
       }
       [System.IO.File]::WriteAllText(
         $NgrokPublicUrlPath,

@@ -1969,6 +1969,11 @@ export class App implements OnInit, OnDestroy {
           data = JSON.parse(text) as Record<string, unknown>;
         } catch {
           if (!response.ok) {
+            if ([501, 502, 503, 504].includes(response.status)) {
+              throw new Error(
+                'El enlace online no tiene un servidor conectado. Ejecuta nuevamente “Iniciar Barbería Internet” en el computador principal.',
+              );
+            }
             throw new Error(`El servidor online respondió con un error (${response.status}).`);
           }
           throw new Error('La respuesta del servidor llegó incompleta. Intenta nuevamente.');
