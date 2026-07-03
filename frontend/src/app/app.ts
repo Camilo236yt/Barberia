@@ -49,6 +49,15 @@ interface Sale {
   reviewed_at?: string;
 }
 
+interface Expense {
+  id: string;
+  date: string;
+  created_at: string;
+  branch_id: string;
+  description: string;
+  amount: number;
+}
+
 interface ClosureBarber {
   barber_id: string;
   barber_name: string;
@@ -107,6 +116,7 @@ interface BootstrapResponse {
   services: ServiceItem[];
   sales?: Sale[];
   closures?: Closure[];
+  expenses?: Expense[];
   settings: {
     commission_rate: number;
     currency: string;
@@ -169,6 +179,7 @@ export class App implements OnInit, OnDestroy {
   services: ServiceItem[] = [];
   sales: Sale[] = [];
   closures: Closure[] = [];
+  expenses: Expense[] = [];
   settings = {
     commission_rate: 0.5,
     currency: 'COP',
@@ -220,6 +231,13 @@ export class App implements OnInit, OnDestroy {
     client_name: '',
     proof_note: '',
     sale_time: '',
+  };
+  expenseSaving = false;
+  expenseMessage = '';
+  expenseMessageType: 'success' | 'error' | '' = '';
+  newExpense = {
+    description: '',
+    amount: 0,
   };
   historyMonthKey = this.todayKey().slice(0, 7);
   localHistoryMonths: string[] = [];
@@ -451,6 +469,7 @@ export class App implements OnInit, OnDestroy {
       this.services = data.services || [];
       this.sales = data.sales || [];
       this.closures = data.closures || [];
+      this.expenses = data.expenses || [];
       this.settings = data.settings || this.settings;
       this.supportsHistoricalSales =
         data.capabilities?.historical_sales === true &&
@@ -1407,6 +1426,84 @@ export class App implements OnInit, OnDestroy {
 
   accountingShopShare(): number {
     return this.accountingTotal() - this.accountingPayrollTotal();
+  }
+
+  accountingExpenses(): Expense[] {
+    return this.expenses
+      .filter(
+        (expense) =>
+          expense.branch_id === this.activeBranchId && expense.date === this.accountingDate,
+      )
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+
+  accountingExpenseTotal(): number {
+    return this.accountingExpenses().reduce(
+      (total, expense) => total + Number(expense.amount || 0),
+      0,
+    );
+  }
+
+  accountingShopNetAfterExpenses(): number {
+    return this.accountingShopShare() - this.accountingExpenseTotal();
+  }
+
+  async createExpense(): Promise<void> {
+    if (this.expenseSaving) return;
+    if (this.newExpense.description.trim().length < 2) {
+      this.expenseMessage = 'Escribe el concepto del gasto.';
+      this.expenseMessageType = 'error';
+      return;
+    }
+    if (Number(this.newExpense.amount) <= 0) {
+      this.expenseMessage = 'El valor del gasto debe ser mayor a cero.';
+      this.expenseMessageType = 'error';
+      return;
+    }
+    this.expenseSaving = true;
+    try {
+      await this.api('/api/expenses', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: this.accountingDate,
+          description: this.newExpense.description.trim(),
+          amount: Number(this.newExpense.amount),
+        }),
+      });
+      this.newExpense = { description: '', amount: 0 };
+      this.expenseMessage = `Gasto agregado al ${this.accountingDate}.`;
+      this.expenseMessageType = 'success';
+      await this.loadData(true);
+    } catch (error) {
+      this.expenseMessage = this.errorMessage(error);
+      this.expenseMessageType = 'error';
+    } finally {
+      this.expenseSaving = false;
+      this.renderNow();
+    }
+  }
+
+  async deleteExpense(expense: Expense): Promise<void> {
+    if (
+      !window.confirm(
+        `¿Eliminar el gasto "${expense.description}" por ${this.formatMoney(expense.amount)}?`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await this.api(`/api/expenses/${expense.id}/delete`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      this.expenseMessage = 'Gasto eliminado correctamente.';
+      this.expenseMessageType = 'success';
+      await this.loadData(true);
+    } catch (error) {
+      this.expenseMessage = this.errorMessage(error);
+      this.expenseMessageType = 'error';
+      this.renderNow();
+    }
   }
 
   examinedSales(): Sale[] {

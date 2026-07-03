@@ -637,6 +637,43 @@
               </article>
             </div>
           </section>
+
+          <section class="tool-panel full-span expense-panel">
+            <div class="panel-heading">
+              <div><p>Gastos · {{ accountingDate }}</p><h2>Descuentos de la barbería</h2></div>
+              <span class="status-pill">{{ accountingExpenses().length }} gastos</span>
+            </div>
+            <div class="expense-summary">
+              <div><span>Parte bruta de la barbería</span><strong>{{ formatMoney(accountingShopShare()) }}</strong></div>
+              <div><span>Total de gastos</span><strong>− {{ formatMoney(accountingExpenseTotal()) }}</strong></div>
+              <div [class.negative]="accountingShopNetAfterExpenses() < 0">
+                <span>Saldo neto de la barbería</span>
+                <strong>{{ formatMoney(accountingShopNetAfterExpenses()) }}</strong>
+              </div>
+            </div>
+            <form class="expense-form" (ngSubmit)="createExpense()">
+              <label class="field">
+                <span>Concepto del gasto</span>
+                <input name="expenseDescription" type="text" minlength="2" maxlength="100" placeholder="Ej. Compra de productos" [(ngModel)]="newExpense.description" required>
+              </label>
+              <label class="field">
+                <span>Valor</span>
+                <input name="expenseAmount" type="number" min="1" step="1000" [(ngModel)]="newExpense.amount" required>
+              </label>
+              <button class="primary-button" type="submit" [disabled]="expenseSaving">
+                {{ expenseSaving ? 'Guardando gasto…' : 'Agregar gasto' }}
+              </button>
+            </form>
+            <p class="form-message" [class.success]="expenseMessageType === 'success'" [class.error]="expenseMessageType === 'error'">{{ expenseMessage }}</p>
+            <div class="expense-list" *ngIf="accountingExpenses().length; else noExpenses">
+              <article *ngFor="let expense of accountingExpenses(); trackBy: trackById">
+                <div><strong>{{ expense.description }}</strong><small>{{ expense.date }}</small></div>
+                <strong>− {{ formatMoney(expense.amount) }}</strong>
+                <button class="small-button reject" type="button" (click)="deleteExpense(expense)">Eliminar</button>
+              </article>
+            </div>
+            <ng-template #noExpenses><div class="empty-state">No hay gastos registrados en este día</div></ng-template>
+          </section>
         </div>
       </section>
 

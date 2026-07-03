@@ -45,7 +45,7 @@ LOCAL_UI_CLOSE_GRACE_SECONDS = 6
 LOCAL_UI_HEARTBEAT_TIMEOUT_SECONDS = 90
 HISTORY_BACKUP_LOCK = threading.Lock()
 HISTORY_ARCHIVE_CACHE_KEY = None
-HISTORY_ARCHIVE_CACHE = ([], [])
+HISTORY_ARCHIVE_CACHE = ([], [], [])
 
 DEFAULT_DB = {
     "branches": [
@@ -84,6 +84,7 @@ DEFAULT_DB = {
     ],
     "sales": [],
     "closures": [],
+    "expenses": [],
     "settings": {
         "commission_rate": 0.5,
         "currency": "COP",
@@ -152,7 +153,7 @@ def read_db():
         data = json.load(db_file)
 
     changed = False
-    for key in ["branches", "barbers", "services", "sales", "closures"]:
+    for key in ["branches", "barbers", "services", "sales", "closures", "expenses"]:
         if key not in data:
             data[key] = DEFAULT_DB[key]
             changed = True
@@ -326,6 +327,33 @@ def materialize_archived_sale(db, sale_id):
                 known_closure_ids.add(archived_closure.get("id"))
 
         return find_by_id(db["sales"], sale_id)
+    return None
+
+
+def materialize_archived_day(db, date_key):
+    archive_path = HISTORY_ARCHIVE_DIR / f"{date_key}.zip"
+    archived = read_history_archive(archive_path) if archive_path.exists() else None
+    if not archived:
+        return
+    for collection_name in ("sales", "closures", "expenses"):
+        db.setdefault(collection_name, [])
+        known_ids = {item.get("id") for item in db[collection_name]}
+        for archived_item in archived.get(collection_name, []):
+            if archived_item.get("id") not in known_ids:
+                db[collection_name].append(archived_item)
+                known_ids.add(archived_item.get("id"))
+
+
+def materialize_archived_expense(db, expense_id):
+    expense = find_by_id(db.get("expenses", []), expense_id)
+    if expense:
+        return expense
+    for archive_path in sorted(HISTORY_ARCHIVE_DIR.glob("*.zip"), reverse=True):
+        archived = read_history_archive(archive_path)
+        if not archived or not find_by_id(archived.get("expenses", []), expense_id):
+            continue
+        materialize_archived_day(db, archive_path.stem)
+        return find_by_id(db["expenses"], expense_id)
     return None
 
 
@@ -623,6 +651,11 @@ def history_day_payload(db, date_key):
         "closures": [
             closure for closure in db["closures"] if closure.get("date") == date_key
         ],
+        "expenses": [
+            expense
+            for expense in db.get("expenses", [])
+            if expense.get("date") == date_key
+        ],
     }
 
 
@@ -707,8 +740,10 @@ def combined_history(db):
     global HISTORY_ARCHIVE_CACHE_KEY, HISTORY_ARCHIVE_CACHE
     sales = list(db["sales"])
     closures = list(db["closures"])
+    expenses = list(db.get("expenses", []))
     sale_ids = {sale.get("id") for sale in sales}
     closure_ids = {closure.get("id") for closure in closures}
+    expense_ids = {expense.get("id") for expense in expenses}
     archive_paths = sorted(HISTORY_ARCHIVE_DIR.glob("*.zip"))
     cache_key = tuple(
         (str(path), path.stat().st_mtime_ns, path.stat().st_size) for path in archive_paths
@@ -716,13 +751,15 @@ def combined_history(db):
     if cache_key != HISTORY_ARCHIVE_CACHE_KEY:
         archived_sales = []
         archived_closures = []
+        archived_expenses = []
         for archive_path in archive_paths:
             archived = read_history_archive(archive_path)
             if not archived:
                 continue
             archived_sales.extend(archived.get("sales", []))
             archived_closures.extend(archived.get("closures", []))
-        HISTORY_ARCHIVE_CACHE = (archived_sales, archived_closures)
+            archived_expenses.extend(archived.get("expenses", []))
+        HISTORY_ARCHIVE_CACHE = (archived_sales, archived_closures, archived_expenses)
         HISTORY_ARCHIVE_CACHE_KEY = cache_key
 
     for sale in HISTORY_ARCHIVE_CACHE[0]:
@@ -733,7 +770,11 @@ def combined_history(db):
         if closure.get("id") not in closure_ids:
             closures.append(closure)
             closure_ids.add(closure.get("id"))
-    return sales, closures
+    for expense in HISTORY_ARCHIVE_CACHE[2]:
+        if expense.get("id") not in expense_ids:
+            expenses.append(expense)
+            expense_ids.add(expense.get("id"))
+    return sales, closures, expenses
 
 
 def prepare_existing_history_archives(db):
@@ -1103,7 +1144,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 return
             with LOCK:
                 db = read_db()
-                history_sales, history_closures = combined_history(db)
+                history_sales, history_closures, history_expenses = combined_history(db)
                 branch = find_by_id(db["branches"], branch_id)
                 if not branch:
                     self.send_json({"error": "Barberia no encontrada."}, 404)
@@ -1124,6 +1165,11 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                             closure
                             for closure in history_closures
                             if closure.get("branch_id") == branch_id
+                        ],
+                        "expenses": [
+                            expense
+                            for expense in history_expenses
+                            if expense.get("branch_id") == branch_id
                         ],
                         "settings": db["settings"],
                         "capabilities": {
@@ -1223,6 +1269,18 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 if not role or not self.branch_scope(role):
                     return
                 self.delete_service(path.split("/")[3])
+                return
+            if path == "/api/expenses":
+                role = self.require_admin_role()
+                if not role or not self.branch_scope(role):
+                    return
+                self.create_expense()
+                return
+            if re.match(r"^/api/expenses/[^/]+/delete$", path):
+                role = self.require_admin_role()
+                if not role or not self.branch_scope(role):
+                    return
+                self.delete_expense(path.split("/")[3])
                 return
             if path == "/api/sales":
                 role = self.require_admin_role()
@@ -1529,6 +1587,73 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             write_db(db)
         publish_data_change()
         self.send_json({"deleted": service_id})
+
+    def create_expense(self):
+        payload = self.read_json_body()
+        description = str(payload.get("description") or "").strip()
+        if len(description) < 2:
+            raise ValueError("Escribe el concepto del gasto.")
+        if len(description) > 100:
+            raise ValueError("El concepto del gasto no puede superar 100 caracteres.")
+        amount = money_to_int(payload.get("amount"))
+        if not amount:
+            raise ValueError("El valor del gasto debe ser mayor a cero.")
+        date_key = str(payload.get("date") or today_key()).strip()
+        try:
+            parsed_date = dt.date.fromisoformat(date_key)
+        except ValueError:
+            raise ValueError("Selecciona una fecha valida para el gasto.")
+        if parsed_date > dt.date.today():
+            raise ValueError("No puedes registrar un gasto en una fecha futura.")
+
+        branch_id = self.headers.get("X-Branch-Id")
+        with LOCK:
+            db = read_db()
+            branch = find_by_id(db["branches"], branch_id)
+            if not branch or not branch.get("active", True):
+                raise ValueError("Barberia no encontrada.")
+            materialize_archived_day(db, date_key)
+            expense = {
+                "id": f"gasto-{uuid.uuid4().hex[:10]}",
+                "date": date_key,
+                "created_at": now_iso(),
+                "branch_id": branch_id,
+                "description": description,
+                "amount": amount,
+            }
+            db["expenses"].insert(0, expense)
+            write_db(db)
+            if find_closure(db, date_key, branch_id) or (
+                HISTORY_ARCHIVE_DIR / f"{date_key}.zip"
+            ).exists():
+                write_history_archive(db, date_key)
+                queue_history_backup(date_key)
+            publish_data_change()
+            self.send_json({"expense": expense}, 201)
+
+    def delete_expense(self, expense_id):
+        with LOCK:
+            db = read_db()
+            expense = materialize_archived_expense(db, expense_id)
+            if not expense:
+                self.send_json({"error": "Gasto no encontrado."}, 404)
+                return
+            branch_id = self.headers.get("X-Branch-Id")
+            if expense.get("branch_id") != branch_id:
+                self.send_json({"error": "Este gasto pertenece a otra barberia."}, 403)
+                return
+            date_key = expense.get("date")
+            db["expenses"] = [
+                item for item in db["expenses"] if item.get("id") != expense_id
+            ]
+            write_db(db)
+            if find_closure(db, date_key, branch_id) or (
+                HISTORY_ARCHIVE_DIR / f"{date_key}.zip"
+            ).exists():
+                write_history_archive(db, date_key)
+                queue_history_backup(date_key)
+            publish_data_change()
+            self.send_json({"deleted": expense_id})
 
     def create_sale(self):
         payload = self.read_json_body()
