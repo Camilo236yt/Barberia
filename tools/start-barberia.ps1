@@ -18,6 +18,7 @@ $OnlineTokenPath = Join-Path $AppRoot "data\admin-online-token.txt"
 $OnlineLinkPath = Join-Path $AppRoot "LINK_ADMIN_ONLINE.txt"
 $PythonVersion = "3.13.14"
 $PythonSha256 = "90b4e5b9898b72d744650524bff92377c367f44bd5fbd09e3148656c080ad907"
+$LauncherVersion = "2026.07.03.3"
 
 function Write-Step($Message) {
   Write-Host "[Barberia] $Message"
@@ -32,7 +33,17 @@ function Invoke-UpdateCheck {
 
   Write-Step "Buscando actualizaciones en GitHub..."
   $windowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-  & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File "`"$updater`"" -AppRoot "`"$AppRoot`""
+  & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File $updater -AppRoot $AppRoot
+  if ($LASTEXITCODE -eq 10) {
+    Write-Step "Cargando inmediatamente la version nueva..."
+    $restartArguments = @("-SkipUpdateCheck")
+    if ($NoBrowser) { $restartArguments += "-NoBrowser" }
+    if ($NoPause) { $restartArguments += "-NoPause" }
+    if ($CheckOnly) { $restartArguments += "-CheckOnly" }
+    if ($Internet) { $restartArguments += "-Internet" }
+    & $PSCommandPath @restartArguments
+    exit $LASTEXITCODE
+  }
 }
 
 function Install-PortablePythonIfMissing {
@@ -323,7 +334,7 @@ function Stop-RemoteNgrokEndpoint($EndpointUrl) {
 
 function Find-NgrokEndpointProcess {
   $expectedPath = [System.IO.Path]::GetFullPath($NgrokExe)
-  $foundProcesses = @()
+  $foundProcesses = [System.Collections.Generic.List[object]]::new()
   foreach ($processInfo in Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) {
     if (-not $processInfo.ExecutablePath -or -not $processInfo.CommandLine) {
       continue
@@ -335,11 +346,11 @@ function Find-NgrokEndpointProcess {
       $parentIsRunning = $null -ne (
         Get-Process -Id $processInfo.ParentProcessId -ErrorAction SilentlyContinue
       )
-      $foundProcesses += [pscustomobject]@{
+      [void]$foundProcesses.Add([pscustomobject]@{
         Process = Get-Process -Id $processInfo.ProcessId -ErrorAction SilentlyContinue
         ParentProcessId = $processInfo.ParentProcessId
         IsOrphan = -not $parentIsRunning
-      }
+      })
     }
   }
   return @($foundProcesses | Where-Object { $_.Process })
@@ -555,6 +566,7 @@ try {
     Invoke-UpdateCheck
   }
 
+  Write-Step "Iniciador actualizado $LauncherVersion."
   Build-Frontend
   $python = Find-Python
   if (-not $python) {
@@ -741,6 +753,9 @@ try {
   Write-Host ""
   Write-Host "No se pudo iniciar Barberia Control:" -ForegroundColor Red
   Write-Host $_.Exception.Message -ForegroundColor Red
+  if ($_.InvocationInfo.ScriptLineNumber) {
+    Write-Host "Detalle tecnico: linea $($_.InvocationInfo.ScriptLineNumber)." -ForegroundColor DarkRed
+  }
   Write-Host ""
   if (-not $NoPause) {
     Read-Host "Presiona Enter para cerrar"

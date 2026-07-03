@@ -594,6 +594,7 @@ La contabilidad, imagenes y configuracion local se conservaran. Los archivos mod
         "La actualizacion y reparacion terminaron correctamente.`n`nBarberia Control continuara iniciando.$recoveryMessage" `
         "Actualizacion completada"
     }
+    exit 10
   }
   exit 0
 } catch {
