@@ -44,6 +44,8 @@ LOCAL_UI_MONITOR_ARMED = False
 LOCAL_UI_CLOSE_GRACE_SECONDS = 6
 LOCAL_UI_HEARTBEAT_TIMEOUT_SECONDS = 90
 HISTORY_BACKUP_LOCK = threading.Lock()
+HISTORY_BACKUP_ACTIVITY_LOCK = threading.Lock()
+HISTORY_BACKUP_ACTIVE = 0
 HISTORY_ARCHIVE_CACHE_KEY = None
 HISTORY_ARCHIVE_CACHE = ([], [], [])
 
@@ -888,15 +890,22 @@ def read_history_backup_status():
 
 
 def queue_history_backup(date_key):
+    global HISTORY_BACKUP_ACTIVE
     write_history_backup_status(
         "queued", date_key, "Respaldo preparado. Esperando el envio a GitHub."
     )
+    with HISTORY_BACKUP_ACTIVITY_LOCK:
+        HISTORY_BACKUP_ACTIVE += 1
 
     def upload():
+        global HISTORY_BACKUP_ACTIVE
         try:
             run_history_backup("Upload", date_key)
         except Exception as exc:
             print(f"No se pudo subir el historial {date_key}: {exc}")
+        finally:
+            with HISTORY_BACKUP_ACTIVITY_LOCK:
+                HISTORY_BACKUP_ACTIVE = max(0, HISTORY_BACKUP_ACTIVE - 1)
 
     threading.Thread(target=upload, daemon=True).start()
 
@@ -949,7 +958,30 @@ def monitor_local_ui(server):
             ]
             for session_id in expired:
                 LOCAL_UI_SESSIONS.pop(session_id, None)
-            should_stop = not LOCAL_UI_SESSIONS
+            has_local_session = bool(LOCAL_UI_SESSIONS)
+
+        with ADMIN_ASSIGNMENT_LOCK:
+            expired_admin_devices = [
+                device_id
+                for device_id, session in ADMIN_DEVICE_SESSIONS.items()
+                if now - session.get("last_seen", now) >= ADMIN_DEVICE_TIMEOUT_SECONDS
+            ]
+            for device_id in expired_admin_devices:
+                ADMIN_DEVICE_SESSIONS.pop(device_id, None)
+                ADMIN_ASSIGNMENTS.pop(device_id, None)
+            has_online_session = any(
+                session.get("role") == "online"
+                for session in ADMIN_DEVICE_SESSIONS.values()
+            )
+
+        with HISTORY_BACKUP_ACTIVITY_LOCK:
+            backup_is_active = HISTORY_BACKUP_ACTIVE > 0
+
+        should_stop = (
+            not has_local_session
+            and not has_online_session
+            and not backup_is_active
+        )
         if should_stop:
             print("La pestaña local se cerro. Apagando Barberia Control.")
             server.shutdown()
@@ -1406,6 +1438,11 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 else:
                     self.wfile.write(b": heartbeat\n\n")
                 self.wfile.flush()
+                device_id = self.admin_device_id()
+                with ADMIN_ASSIGNMENT_LOCK:
+                    session = ADMIN_DEVICE_SESSIONS.get(device_id)
+                    if session:
+                        session["last_seen"] = time.monotonic()
         except (BrokenPipeError, ConnectionResetError, OSError):
             return
 
