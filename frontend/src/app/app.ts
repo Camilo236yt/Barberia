@@ -1974,11 +1974,21 @@ export class App implements OnInit, OnDestroy {
     const firstDay = new Date(year, month - 1, 1);
     const daysInMonth = new Date(year, month, 0).getDate();
     const leadingBlanks = (firstDay.getDay() + 6) % 7;
-    const closedDates = new Set(
+    const billedDates = new Set(
       this.orderedClosures()
         .filter((closure) => closure.date.startsWith(this.historyMonthKey))
         .map((closure) => closure.date),
     );
+    for (const sale of this.branchSales()) {
+      const dateKey = this.saleDay(sale);
+      if (
+        dateKey.startsWith(this.historyMonthKey) &&
+        sale.status !== 'annulled' &&
+        sale.status !== 'rejected'
+      ) {
+        billedDates.add(dateKey);
+      }
+    }
     const days: CalendarDay[] = [];
     for (let index = 0; index < leadingBlanks; index++) {
       days.push({
@@ -1995,7 +2005,7 @@ export class App implements OnInit, OnDestroy {
         key,
         day,
         inMonth: true,
-        hasSales: closedDates.has(key),
+        hasSales: billedDates.has(key),
         isFuture: key > this.todayKey(),
       });
     }
@@ -2004,7 +2014,39 @@ export class App implements OnInit, OnDestroy {
 
   selectHistoryDate(dateKey: string): void {
     const closure = this.orderedClosures().find((item) => item.date === dateKey);
-    if (closure) this.selectExaminedClosure(closure);
+    if (closure) {
+      this.selectExaminedClosure(closure);
+      return;
+    }
+    if (this.salesForDate(dateKey).length) {
+      this.examinedDate = dateKey;
+      this.examinedBranchId = this.activeBranchId;
+      this.historyMonthKey = dateKey.slice(0, 7);
+    }
+  }
+
+  historyBilledDatesWithoutClosure(): string[] {
+    const closedDates = new Set(this.orderedClosures().map((closure) => closure.date));
+    return [
+      ...new Set(
+        this.branchSales()
+          .filter(
+            (sale) =>
+              sale.status !== 'annulled' &&
+              sale.status !== 'rejected' &&
+              !closedDates.has(this.saleDay(sale)),
+          )
+          .map((sale) => this.saleDay(sale)),
+      ),
+    ].sort().reverse();
+  }
+
+  historyRecordCount(): number {
+    return this.orderedClosures().length + this.historyBilledDatesWithoutClosure().length;
+  }
+
+  historyDateTotal(dateKey: string): number {
+    return this.sum(this.confirmedSalesForDate(dateKey));
   }
 
   async loadHistoryBackups(): Promise<void> {
@@ -2060,9 +2102,18 @@ export class App implements OnInit, OnDestroy {
   }
 
   async uploadTodayHistory(): Promise<void> {
+    await this.uploadHistoryDate(this.todayKey());
+  }
+
+  async uploadExaminedHistory(): Promise<void> {
+    if (!this.examinedDate) return;
+    await this.uploadHistoryDate(this.examinedDate);
+  }
+
+  async uploadHistoryDate(dateKey: string): Promise<void> {
     if (this.historyUploadLoading || this.backupIsRunning()) return;
     this.historyUploadLoading = true;
-    this.historyBackupMessage = 'Preparando todos los datos de hoy...';
+    this.historyBackupMessage = `Preparando todos los datos del ${dateKey}...`;
     this.historyBackupMessageType = '';
     this.renderNow();
     try {
@@ -2070,12 +2121,13 @@ export class App implements OnInit, OnDestroy {
         '/api/history-backups/upload',
         {
           method: 'POST',
+          body: JSON.stringify({ date: dateKey }),
         },
       );
-      const dateKey = result.backup_date || this.todayKey();
+      const backupDate = result.backup_date || dateKey;
       this.historyBackupMessage =
-        result.message || `Datos del ${dateKey} preparados para subir a GitHub.`;
-      this.startBackupProgress(dateKey, 'manual');
+        result.message || `Datos del ${backupDate} preparados para subir a GitHub.`;
+      this.startBackupProgress(backupDate, 'manual');
     } catch (error) {
       const message = this.errorMessage(error);
       this.backupProgressContext = 'manual';

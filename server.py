@@ -365,17 +365,18 @@ def materialize_archived_sale(db, sale_id):
 
 
 def materialize_archived_day(db, date_key):
-    archive_path = HISTORY_ARCHIVE_DIR / f"{date_key}.zip"
-    archived = read_history_archive(archive_path) if archive_path.exists() else None
-    if not archived:
-        return
-    for collection_name in ("sales", "closures", "expenses"):
-        db.setdefault(collection_name, [])
-        known_ids = {item.get("id") for item in db[collection_name]}
-        for archived_item in archived.get(collection_name, []):
-            if archived_item.get("id") not in known_ids:
-                db[collection_name].append(archived_item)
-                known_ids.add(archived_item.get("id"))
+    archive_paths = sorted(HISTORY_ARCHIVE_DIR.glob(f"{date_key}*.zip"))
+    for archive_path in archive_paths:
+        archived = read_history_archive(archive_path)
+        if not archived:
+            continue
+        for collection_name in ("sales", "closures", "expenses"):
+            db.setdefault(collection_name, [])
+            known_ids = {item.get("id") for item in db[collection_name]}
+            for archived_item in archived.get(collection_name, []):
+                if archived_item.get("id") not in known_ids:
+                    db[collection_name].append(archived_item)
+                    known_ids.add(archived_item.get("id"))
 
 
 def materialize_archived_expense(db, expense_id):
@@ -2051,10 +2052,14 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             self.send_json({"closure": closure, "backup_date": date_key})
 
     def upload_history_backup(self):
-        # Consumir el cuerpo del POST evita que "{}" quede pendiente en una
-        # conexión keep-alive y convierta el siguiente GET en el método "{}GET".
-        self.read_json_body()
-        date_key = today_key()
+        payload = self.read_json_body()
+        date_key = str(payload.get("date") or today_key()).strip()
+        try:
+            parsed_date = dt.date.fromisoformat(date_key)
+        except ValueError:
+            raise ValueError("Selecciona una fecha valida para exportar.")
+        if parsed_date > dt.date.today():
+            raise ValueError("No puedes exportar una fecha futura.")
         branch_id = self.headers.get("X-Branch-Id")
 
         with LOCK:
@@ -2062,6 +2067,17 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             branch = find_by_id(db["branches"], branch_id)
             if not branch or not branch.get("active", True):
                 raise ValueError("Selecciona una barberia valida.")
+            materialize_archived_day(db, date_key)
+            has_day_data = any(
+                item_day(sale) == date_key for sale in db.get("sales", [])
+            ) or any(
+                closure.get("date") == date_key for closure in db.get("closures", [])
+            ) or any(
+                expense.get("date") == date_key for expense in db.get("expenses", [])
+            )
+            if not has_day_data:
+                raise ValueError(f"No hay datos guardados para el {date_key}.")
+            write_db(db)
             write_history_archive(db, date_key)
 
         queue_history_backup(date_key)
@@ -2069,7 +2085,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             {
                 "ok": True,
                 "backup_date": date_key,
-                "message": "Los datos de hoy estan preparados para subir a GitHub.",
+                "message": f"Los datos del {date_key} estan preparados para subir a GitHub.",
             },
             202,
         )

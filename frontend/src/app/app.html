@@ -882,7 +882,7 @@
             </div>
           </div>
           <div class="calendar-legend">
-            <span><i class="legend-dot billed"></i> Con cierre guardado</span>
+            <span><i class="legend-dot billed"></i> Con facturación o cierre</span>
             <span><i class="legend-dot empty"></i> Sin cierre</span>
             <span><i class="legend-dot future"></i> Día futuro</span>
           </div>
@@ -988,9 +988,9 @@
           <section class="tool-panel history-list-panel">
             <div class="panel-heading">
               <div><p>{{ activeBranch()?.name }}</p><h2>Aperturas y cierres</h2></div>
-              <span class="status-pill">{{ orderedClosures().length }} registros</span>
+              <span class="status-pill">{{ historyRecordCount() }} registros</span>
             </div>
-            <div class="closure-list" *ngIf="orderedClosures().length; else noClosures">
+            <div class="closure-list" *ngIf="historyRecordCount(); else noClosures">
               <article
                 class="closure-item"
                 [class.selected]="examinedDate === closure.date && examinedBranchId === closure.branch_id"
@@ -1006,6 +1006,21 @@
                 </div>
                 <button class="secondary-button inspect-button" type="button" (click)="selectExaminedClosure(closure)">Examinar día</button>
               </article>
+              <article
+                class="closure-item"
+                [class.selected]="examinedDate === dateKey && examinedBranchId === activeBranchId"
+                *ngFor="let dateKey of historyBilledDatesWithoutClosure()"
+              >
+                <div class="closure-top">
+                  <div>
+                    <span class="branch-label">{{ activeBranch()?.name }}</span>
+                    <strong>{{ dateKey }}</strong>
+                    <span class="sale-meta">{{ confirmedSalesForDate(dateKey).length }} ventas · {{ formatMoney(historyDateTotal(dateKey)) }}</span>
+                  </div>
+                  <span class="state-tag pending_review">Facturado sin cierre</span>
+                </div>
+                <button class="secondary-button inspect-button" type="button" (click)="selectHistoryDate(dateKey)">Examinar día</button>
+              </article>
             </div>
             <ng-template #noClosures><div class="empty-state">Todavía no hay cierres guardados</div></ng-template>
           </section>
@@ -1013,7 +1028,17 @@
           <section class="tool-panel history-detail" *ngIf="examinedDate; else chooseClosure">
             <div class="panel-heading">
               <div><p>{{ branchName(examinedBranchId) }}</p><h2>{{ examinedDate }}</h2></div>
-              <span class="status-pill">{{ examinedSales().length }} ventas</span>
+              <div class="history-backup-actions">
+                <button
+                  class="secondary-button"
+                  type="button"
+                  [disabled]="historyUploadLoading || backupIsRunning()"
+                  (click)="uploadExaminedHistory()"
+                >
+                  {{ historyUploadLoading ? 'Preparando...' : 'Exportar este día' }}
+                </button>
+                <span class="status-pill">{{ examinedSales().length }} ventas</span>
+              </div>
             </div>
             <div class="closure-grid">
               <div><span>Total</span><strong>{{ formatMoney(dayTotal(examinedDate)) }}</strong></div>
