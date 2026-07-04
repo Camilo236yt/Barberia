@@ -1772,6 +1772,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
 
     def create_sale(self):
         payload = self.read_json_body()
+        client_request_id = str(payload.get("client_request_id") or "").strip()
+        if client_request_id and not re.fullmatch(r"[A-Za-z0-9-]{8,160}", client_request_id):
+            raise ValueError("El identificador local de la venta no es valido.")
         sale_kind = str(payload.get("sale_kind") or "service").strip()
         if sale_kind not in {"service", "product"}:
             raise ValueError("Selecciona si es un servicio o una venta de nevera.")
@@ -1801,6 +1804,22 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 raise ValueError("Selecciona una barberia valida.")
             if branch["id"] != self.headers.get("X-Branch-Id"):
                 raise ValueError("No puedes facturar en una barberia diferente a la de este acceso.")
+            materialize_archived_day(db, sale_date)
+            if client_request_id:
+                existing_sale = next(
+                    (
+                        sale
+                        for sale in db["sales"]
+                        if sale.get("client_request_id") == client_request_id
+                        and sale.get("branch_id") == branch["id"]
+                    ),
+                    None,
+                )
+                if existing_sale:
+                    self.send_json(
+                        {"sale": existing_sale, "already_synchronized": True}
+                    )
+                    return
             if sale_date == today_key() and is_day_closed(db, branch["id"], sale_date):
                 raise ValueError("La caja de esta barberia ya esta cerrada.")
 
@@ -1842,6 +1861,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
 
             sale = {
                 "id": sale_id,
+                "client_request_id": client_request_id or None,
                 "created_at": f"{sale_date}T{sale_time}:00",
                 "branch_id": branch["id"],
                 "branch_name": branch["name"],

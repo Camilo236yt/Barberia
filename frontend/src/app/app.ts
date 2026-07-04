@@ -3,7 +3,7 @@ import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 type PaymentMethod = 'cash' | 'nequi';
-type SaleStatus = 'confirmed' | 'pending_review' | 'rejected' | 'annulled';
+type SaleStatus = 'confirmed' | 'pending_review' | 'rejected' | 'annulled' | 'sync_pending';
 type SaleKind = 'service' | 'product';
 type ClosureStatus = 'closed' | 'reopened';
 type ViewName = 'dashboard' | 'sales' | 'accounting' | 'history' | 'information';
@@ -49,6 +49,26 @@ interface Sale {
   client_name: string;
   status: SaleStatus;
   reviewed_at?: string;
+  client_request_id?: string;
+}
+
+interface PendingOfflineSale {
+  id: string;
+  branch_id: string;
+  queued_at: string;
+  payload: Record<string, unknown>;
+  last_error?: string;
+}
+
+class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status = 0,
+    readonly reconnectable = false,
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
 }
 
 interface Expense {
@@ -197,6 +217,10 @@ export class App implements OnInit, OnDestroy {
   dataLoading = false;
   networkBusy = false;
   lastSyncAt = '';
+  pendingOfflineSales: PendingOfflineSale[] = [];
+  syncingOfflineSales = false;
+  offlineSyncMessage = '';
+  offlineSyncMessageType: 'success' | 'error' | '' = '';
   saleSaving = false;
   adminRole: 'local' | 'online' = 'local';
   adminToken = '';
@@ -312,6 +336,7 @@ export class App implements OnInit, OnDestroy {
   private backupStatusTimer?: number;
   private backupStatusBusy = false;
   private localSessionTimer?: number;
+  private offlineSyncTimer?: number;
   private localSessionId = '';
   private adminDeviceId = '';
   private eventSource?: EventSource;
@@ -325,6 +350,7 @@ export class App implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.detectPortalMode();
     this.adminDeviceId = this.getAdminDeviceId();
+    this.loadOfflineSales();
     this.startLocalSession();
     this.loadAdminOptions();
     this.connectRealtime();
@@ -333,6 +359,13 @@ export class App implements OnInit, OnDestroy {
       if (this.activeBranchId) this.loadData(true);
       else this.loadAdminOptions(true);
     }, 60000);
+    this.offlineSyncTimer = window.setInterval(() => {
+      if (this.pendingOfflineSales.length) {
+        void this.flushOfflineSales();
+      } else if (!this.realtimeConnected && this.activeBranchId) {
+        void this.loadData(true);
+      }
+    }, 5000);
   }
 
   ngOnDestroy(): void {
@@ -340,6 +373,7 @@ export class App implements OnInit, OnDestroy {
     if (this.refreshTimer) window.clearInterval(this.refreshTimer);
     if (this.realtimeRefreshTimer) window.clearTimeout(this.realtimeRefreshTimer);
     if (this.backupStatusTimer) window.clearInterval(this.backupStatusTimer);
+    if (this.offlineSyncTimer) window.clearInterval(this.offlineSyncTimer);
     this.closeLocalSession();
     window.removeEventListener('pagehide', this.localPageHideHandler);
     window.removeEventListener('pageshow', this.localPageShowHandler);
@@ -488,6 +522,7 @@ export class App implements OnInit, OnDestroy {
       this.closures = data.closures || [];
       this.expenses = data.expenses || [];
       this.settings = data.settings || this.settings;
+      this.applyOfflineSalesToView();
       this.supportsHistoricalSales =
         data.capabilities?.historical_sales === true &&
         data.capabilities?.strict_date_filtering === true;
@@ -506,6 +541,7 @@ export class App implements OnInit, OnDestroy {
         minute: '2-digit',
         second: '2-digit',
       }).format(new Date());
+      if (this.pendingOfflineSales.length) void this.flushOfflineSales();
     } catch (error) {
       this.isOnline = false;
       if (!silent) this.showSaleMessage(this.errorMessage(error), 'error');
@@ -749,41 +785,261 @@ export class App implements OnInit, OnDestroy {
       this.showSaleMessage('Sube o toma la foto del comprobante.', 'error');
       return;
     }
+    if (Number(this.saleForm.amount) <= 0) {
+      this.showSaleMessage('El valor cobrado debe ser mayor a cero.', 'error');
+      return;
+    }
 
+    const now = new Date();
+    const saleDate = this.localDateKey(now);
+    const saleTime =
+      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const clientRequestId = this.newClientRequestId();
+    const payload: Record<string, unknown> = {
+      branch_id: this.activeBranchId,
+      sale_kind: this.saleKind,
+      barber_id: this.saleKind === 'product' ? null : this.saleForm.barber_id,
+      service_id: this.saleKind === 'product' ? '' : this.selectedServiceId,
+      custom_service_name:
+        this.saleKind === 'product'
+          ? this.fridgeProductName.trim()
+          : this.isSpecialService
+            ? this.specialServiceName.trim()
+            : '',
+      amount: Number(this.saleForm.amount),
+      payment_method: this.selectedPayment,
+      proof_image: this.proofDataUrl,
+      proof_note: this.saleForm.proof_note,
+      client_name: this.saleForm.client_name,
+      sale_date: saleDate,
+      sale_time: saleTime,
+      client_request_id: clientRequestId,
+    };
     this.saleSaving = true;
+    const saleController = new AbortController();
+    const saleTimeout = window.setTimeout(() => saleController.abort(), 8000);
     try {
       await this.api('/api/sales', {
         method: 'POST',
-        body: JSON.stringify({
-          branch_id: this.activeBranchId,
-          sale_kind: this.saleKind,
-          barber_id: this.saleKind === 'product' ? null : this.saleForm.barber_id,
-          service_id: this.saleKind === 'product' ? '' : this.selectedServiceId,
-          custom_service_name:
-            this.saleKind === 'product'
-              ? this.fridgeProductName.trim()
-              : this.isSpecialService
-                ? this.specialServiceName.trim()
-                : '',
-          amount: Number(this.saleForm.amount),
-          payment_method: this.selectedPayment,
-          proof_image: this.proofDataUrl,
-          proof_note: this.saleForm.proof_note,
-          client_name: this.saleForm.client_name,
-        }),
+        body: JSON.stringify(payload),
+        signal: saleController.signal,
       });
-      this.saleForm.client_name = '';
-      this.saleForm.proof_note = '';
-      this.proofDataUrl = '';
-      this.proofPreviewUrl = '';
-      this.specialServiceName = '';
-      if (this.saleKind === 'service' && this.services.length) this.selectService(this.services[0]);
+      this.resetSaleAfterSave();
       this.showSaleMessage(`Venta guardada en ${this.activeBranch()?.name}.`, 'success');
       await this.loadData(true);
     } catch (error) {
-      this.showSaleMessage(this.errorMessage(error), 'error');
+      if (this.isReconnectableError(error)) {
+        const queued = this.enqueueOfflineSale({
+          id: clientRequestId,
+          branch_id: this.activeBranchId,
+          queued_at: new Date().toISOString(),
+          payload,
+        });
+        if (queued) {
+          this.resetSaleAfterSave();
+          this.showSaleMessage(
+            `Venta guardada en este dispositivo. Se sincronizará automáticamente al reconectar (${this.pendingOfflineSales.length} pendiente${this.pendingOfflineSales.length === 1 ? '' : 's'}).`,
+            'success',
+          );
+        } else {
+          this.showSaleMessage(
+            'No se pudo guardar la venta sin conexión. Libera espacio del navegador y vuelve a intentarlo.',
+            'error',
+          );
+        }
+      } else {
+        this.showSaleMessage(this.errorMessage(error), 'error');
+      }
     } finally {
+      window.clearTimeout(saleTimeout);
       this.saleSaving = false;
+      this.renderNow();
+    }
+  }
+
+  pendingOfflineSaleCount(): number {
+    return this.pendingOfflineSales.length;
+  }
+
+  private offlineSalesStorageKey(): string {
+    return 'capitan-gold-offline-sales-v1';
+  }
+
+  private newClientRequestId(): string {
+    const random =
+      window.crypto?.randomUUID?.() ||
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return `venta-${this.adminDeviceId}-${random}`.slice(0, 160);
+  }
+
+  private loadOfflineSales(): void {
+    try {
+      const parsed = JSON.parse(
+        window.localStorage.getItem(this.offlineSalesStorageKey()) || '[]',
+      ) as PendingOfflineSale[];
+      this.pendingOfflineSales = Array.isArray(parsed)
+        ? parsed.filter(
+            (item) =>
+              item &&
+              typeof item.id === 'string' &&
+              typeof item.branch_id === 'string' &&
+              item.payload &&
+              typeof item.payload === 'object',
+          )
+        : [];
+    } catch {
+      this.pendingOfflineSales = [];
+    }
+  }
+
+  private persistOfflineSales(): boolean {
+    try {
+      window.localStorage.setItem(
+        this.offlineSalesStorageKey(),
+        JSON.stringify(this.pendingOfflineSales),
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private enqueueOfflineSale(item: PendingOfflineSale): boolean {
+    if (this.pendingOfflineSales.some((pending) => pending.id === item.id)) return true;
+    this.pendingOfflineSales.push(item);
+    if (!this.persistOfflineSales()) {
+      this.pendingOfflineSales = this.pendingOfflineSales.filter(
+        (pending) => pending.id !== item.id,
+      );
+      return false;
+    }
+    this.applyOfflineSalesToView();
+    this.offlineSyncMessage = 'Modo reconexión activo: las ventas están protegidas en este dispositivo.';
+    this.offlineSyncMessageType = '';
+    return true;
+  }
+
+  private applyOfflineSalesToView(): void {
+    if (!this.activeBranchId) return;
+    for (const pending of this.pendingOfflineSales) {
+      if (
+        pending.branch_id !== this.activeBranchId ||
+        this.sales.some(
+          (sale) =>
+            sale.client_request_id === pending.id || sale.id === `offline-${pending.id}`,
+        )
+      ) {
+        continue;
+      }
+      const payload = pending.payload;
+      const barberId =
+        typeof payload['barber_id'] === 'string' ? payload['barber_id'] : null;
+      const product = payload['sale_kind'] === 'product';
+      const serviceId =
+        typeof payload['service_id'] === 'string' ? payload['service_id'] : '';
+      const customName =
+        typeof payload['custom_service_name'] === 'string'
+          ? payload['custom_service_name']
+          : '';
+      const service = this.services.find((item) => item.id === serviceId);
+      const barber = this.barbers.find((item) => item.id === barberId);
+      const amount = Number(payload['amount'] || 0);
+      const listedPrice = product || customName ? null : Number(service?.price || amount);
+      const tipAmount = listedPrice ? Math.max(0, amount - listedPrice) : 0;
+      this.sales.unshift({
+        id: `offline-${pending.id}`,
+        client_request_id: pending.id,
+        created_at: `${payload['sale_date']}T${payload['sale_time']}:00`,
+        branch_id: pending.branch_id,
+        branch_name: this.activeBranch()?.name || 'Barbería',
+        sale_kind: product ? 'product' : 'service',
+        barber_id: product ? null : barberId,
+        barber_name: product ? 'Barbería · Nevera' : barber?.name || 'Barbero',
+        service_id: product ? 'nevera' : serviceId || 'especial',
+        service_name: customName || service?.name || 'Venta pendiente',
+        amount,
+        base_amount: amount - tipAmount,
+        listed_price: listedPrice,
+        tip_amount: tipAmount,
+        payment_method: payload['payment_method'] === 'nequi' ? 'nequi' : 'cash',
+        proof_note:
+          typeof payload['proof_note'] === 'string' ? payload['proof_note'] : '',
+        client_name:
+          typeof payload['client_name'] === 'string' ? payload['client_name'] : '',
+        status: 'sync_pending',
+      });
+    }
+  }
+
+  private resetSaleAfterSave(): void {
+    this.saleForm.client_name = '';
+    this.saleForm.proof_note = '';
+    this.proofDataUrl = '';
+    this.proofPreviewUrl = '';
+    this.specialServiceName = '';
+    if (this.saleKind === 'service' && this.services.length) this.selectService(this.services[0]);
+  }
+
+  private isReconnectableError(error: unknown): boolean {
+    return error instanceof ApiRequestError && error.reconnectable;
+  }
+
+  async flushOfflineSales(): Promise<void> {
+    if (
+      this.syncingOfflineSales ||
+      !this.activeBranchId ||
+      !this.pendingOfflineSales.some((item) => item.branch_id === this.activeBranchId)
+    ) {
+      return;
+    }
+    this.syncingOfflineSales = true;
+    this.offlineSyncMessage = 'Reconexión disponible. Sincronizando ventas pendientes...';
+    this.offlineSyncMessageType = '';
+    let synchronized = 0;
+    try {
+      for (const pending of [...this.pendingOfflineSales]) {
+        if (pending.branch_id !== this.activeBranchId) continue;
+        const syncController = new AbortController();
+        const syncTimeout = window.setTimeout(() => syncController.abort(), 10000);
+        try {
+          await this.api('/api/sales', {
+            method: 'POST',
+            body: JSON.stringify(pending.payload),
+            signal: syncController.signal,
+          });
+          this.pendingOfflineSales = this.pendingOfflineSales.filter(
+            (item) => item.id !== pending.id,
+          );
+          this.persistOfflineSales();
+          synchronized += 1;
+        } catch (error) {
+          if (this.isReconnectableError(error)) {
+            this.realtimeConnected = false;
+            this.offlineSyncMessage =
+              'Servidor no disponible. Las ventas continúan guardadas en este dispositivo.';
+            this.offlineSyncMessageType = '';
+            break;
+          }
+          pending.last_error = this.errorMessage(error);
+          this.persistOfflineSales();
+          this.offlineSyncMessage =
+            `Una venta pendiente necesita revisión: ${pending.last_error}`;
+          this.offlineSyncMessageType = 'error';
+          break;
+        } finally {
+          window.clearTimeout(syncTimeout);
+        }
+      }
+      if (synchronized) {
+        this.offlineSyncMessage =
+          `${synchronized} venta${synchronized === 1 ? '' : 's'} sincronizada${synchronized === 1 ? '' : 's'} correctamente.`;
+        this.offlineSyncMessageType = 'success';
+        await this.loadData(true);
+      } else {
+        this.applyOfflineSalesToView();
+      }
+    } finally {
+      this.syncingOfflineSales = false;
       this.renderNow();
     }
   }
@@ -795,6 +1051,7 @@ export class App implements OnInit, OnDestroy {
     this.eventSource = new EventSource(`/api/events?${params.toString()}`);
     this.eventSource.addEventListener('open', () => {
       this.realtimeConnected = true;
+      void this.flushOfflineSales();
       this.renderNow();
     });
     this.eventSource.addEventListener('db-changed', () => {
@@ -1193,6 +1450,7 @@ export class App implements OnInit, OnDestroy {
       pending_review: 'Pendiente',
       rejected: 'Rechazada',
       annulled: 'Anulada',
+      sync_pending: 'Por sincronizar',
       scheduled: 'Agendada',
       cancelled: 'Cancelada',
       closed: 'Cerrado',
@@ -2369,6 +2627,9 @@ export class App implements OnInit, OnDestroy {
         },
       });
       const text = await response.text();
+      const reconnectableStatus =
+        response.status >= 500 ||
+        (this.adminRole === 'online' && [404, 408, 425, 429].includes(response.status));
       let data: Record<string, unknown> = {};
       if (text) {
         try {
@@ -2376,26 +2637,50 @@ export class App implements OnInit, OnDestroy {
         } catch {
           if (!response.ok) {
             if ([501, 502, 503, 504].includes(response.status)) {
-              throw new Error(
+              throw new ApiRequestError(
                 'El enlace online no tiene un servidor conectado. Ejecuta nuevamente “Iniciar Barbería Internet” en el computador principal.',
+                response.status,
+                true,
               );
             }
-            throw new Error(`El servidor online respondió con un error (${response.status}).`);
+            throw new ApiRequestError(
+              `El servidor online respondió con un error (${response.status}).`,
+              response.status,
+              reconnectableStatus,
+            );
           }
-          throw new Error('La respuesta del servidor llegó incompleta. Intenta nuevamente.');
+          throw new ApiRequestError(
+            'La respuesta del servidor llegó incompleta. Se intentará nuevamente al reconectar.',
+            response.status,
+            this.adminRole === 'online',
+          );
         }
       }
       if (!response.ok) {
-        throw new Error(
+        throw new ApiRequestError(
           typeof data['error'] === 'string'
             ? data['error']
             : `No se pudo completar la acción (${response.status}).`,
+          response.status,
+          reconnectableStatus,
         );
       }
       return data as T;
     } catch (error) {
+      if (error instanceof ApiRequestError) throw error;
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new Error('La conexión está tardando demasiado. Verifica Internet e intenta otra vez.');
+        throw new ApiRequestError(
+          'La conexión está tardando demasiado. Verifica Internet e intenta otra vez.',
+          0,
+          true,
+        );
+      }
+      if (error instanceof TypeError) {
+        throw new ApiRequestError(
+          'No hay conexión con el servidor. La venta puede guardarse en modo reconexión.',
+          0,
+          true,
+        );
       }
       throw error;
     } finally {

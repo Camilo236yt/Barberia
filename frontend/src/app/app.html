@@ -70,8 +70,8 @@
       <div class="sidebar-footer">
         <span class="connection-dot" [class.online]="realtimeConnected"></span>
         <span>
-          <strong>{{ realtimeConnected ? 'Sincronizado' : 'Reconectando' }}</strong>
-          <small>{{ adminRole === 'online' ? 'Administrador online' : 'Servidor principal' }}</small>
+          <strong>{{ pendingOfflineSaleCount() ? pendingOfflineSaleCount() + ' por sincronizar' : realtimeConnected ? 'Sincronizado' : 'Reconectando' }}</strong>
+          <small>{{ pendingOfflineSaleCount() ? 'Ventas protegidas localmente' : adminRole === 'online' ? 'Administrador online' : 'Servidor principal' }}</small>
         </span>
       </div>
     </aside>
@@ -91,11 +91,11 @@
           </h1>
         </div>
         <div class="header-actions">
-          <div class="sync-chip" [class.loading]="networkBusy || dataLoading" [class.offline]="!realtimeConnected && !networkBusy">
+          <div class="sync-chip" [class.loading]="networkBusy || dataLoading || syncingOfflineSales" [class.offline]="(!realtimeConnected || pendingOfflineSaleCount()) && !networkBusy">
             <i></i>
             <span>
-              <strong>{{ networkBusy || dataLoading ? 'Procesando…' : realtimeConnected ? 'Actualizado' : 'Reconectando…' }}</strong>
-              <small>{{ networkBusy || dataLoading ? 'No cierres esta pantalla' : lastSyncAt ? 'Última carga ' + lastSyncAt : 'Verificando conexión' }}</small>
+              <strong>{{ syncingOfflineSales ? 'Sincronizando ventas…' : pendingOfflineSaleCount() ? pendingOfflineSaleCount() + ' venta(s) protegida(s)' : networkBusy || dataLoading ? 'Procesando…' : realtimeConnected ? 'Actualizado' : 'Reconectando…' }}</strong>
+              <small>{{ pendingOfflineSaleCount() ? 'Puedes continuar facturando' : networkBusy || dataLoading ? 'No cierres esta pantalla' : lastSyncAt ? 'Última carga ' + lastSyncAt : 'Verificando conexión' }}</small>
             </span>
           </div>
           <span class="date-chip">{{ todayKey() }}</span>
@@ -203,6 +203,26 @@
       </section>
 
       <section class="view active" *ngIf="selectedView === 'sales'">
+        <div
+          class="offline-sales-banner"
+          *ngIf="pendingOfflineSaleCount() || syncingOfflineSales || offlineSyncMessage"
+          [class.success]="offlineSyncMessageType === 'success'"
+          [class.error]="offlineSyncMessageType === 'error'"
+        >
+          <div>
+            <strong>{{ syncingOfflineSales ? 'Reconectando y sincronizando' : pendingOfflineSaleCount() ? 'Modo reconexión activo' : 'Sincronización completada' }}</strong>
+            <span>{{ offlineSyncMessage || 'Las ventas pendientes están guardadas en este dispositivo.' }}</span>
+          </div>
+          <button
+            class="secondary-button"
+            type="button"
+            *ngIf="pendingOfflineSaleCount()"
+            [disabled]="syncingOfflineSales"
+            (click)="flushOfflineSales()"
+          >
+            {{ syncingOfflineSales ? 'Sincronizando…' : 'Reintentar ahora' }}
+          </button>
+        </div>
         <div class="work-grid">
           <form class="tool-panel sale-form" (ngSubmit)="submitSale()">
             <div class="panel-heading">
@@ -378,12 +398,13 @@
                       <span class="sale-meta">{{ timeOnly(sale.created_at) }}</span>
                       <span class="tip-tag" *ngIf="saleTip(sale) > 0">Propina {{ formatMoney(saleTip(sale)) }}</span>
                       <span class="tip-tag" *ngIf="isProductSale(sale)">Ingreso de la barbería</span>
+                      <span class="tip-tag" *ngIf="sale.status === 'sync_pending'">Por sincronizar</span>
                     </div>
                     <strong>{{ formatMoney(sale.amount) }}</strong>
                   </div>
                   <div class="shift-sale-actions">
-                    <button class="small-button approve" type="button" (click)="startShiftAmountEdit(sale)">Modificar</button>
-                    <button class="small-button reject" type="button" (click)="deleteShiftSale(sale)">Eliminar</button>
+                    <button class="small-button approve" type="button" [disabled]="sale.status === 'sync_pending'" (click)="startShiftAmountEdit(sale)">Modificar</button>
+                    <button class="small-button reject" type="button" [disabled]="sale.status === 'sync_pending'" (click)="deleteShiftSale(sale)">Eliminar</button>
                   </div>
                 </ng-container>
                 <ng-template #shiftAmountEditor>
@@ -1250,11 +1271,11 @@
             <span class="tip-tag table-tip" *ngIf="saleTip(sale) > 0">Propina {{ formatMoney(saleTip(sale)) }}</span>
             <span class="tip-tag table-tip" *ngIf="isProductSale(sale)">Nevera</span>
           </td>
-          <td data-label="Estado"><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
+          <td data-label="Estado"><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review' || sale.status === 'sync_pending'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
           <td data-label="Acciones" *ngIf="allowActions">
             <div class="history-row-actions">
-              <button class="small-button approve" type="button" (click)="startEditSale(sale, actionContext || 'history')">Modificar</button>
-              <button class="small-button reject" type="button" (click)="deleteSale(sale, actionContext || 'history')">Eliminar</button>
+              <button class="small-button approve" type="button" [disabled]="sale.status === 'sync_pending'" (click)="startEditSale(sale, actionContext || 'history')">Modificar</button>
+              <button class="small-button reject" type="button" [disabled]="sale.status === 'sync_pending'" (click)="deleteSale(sale, actionContext || 'history')">Eliminar</button>
             </div>
           </td>
         </tr>

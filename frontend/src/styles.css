@@ -721,6 +721,42 @@ button:focus-visible {
   font-weight: 900;
 }
 
+.offline-sales-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #d7a43b;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: #75500b;
+  padding: 13px 15px;
+  margin-bottom: 16px;
+}
+
+.offline-sales-banner strong,
+.offline-sales-banner span {
+  display: block;
+}
+
+.offline-sales-banner span {
+  margin-top: 4px;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.offline-sales-banner.success {
+  border-color: #9ecdb7;
+  background: #f0f9f4;
+  color: var(--green);
+}
+
+.offline-sales-banner.error {
+  border-color: #dfaaa6;
+  background: #fff2f1;
+  color: var(--red);
+}
+
 .closure-status {
   margin: -4px 0 14px;
 }
