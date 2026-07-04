@@ -1309,6 +1309,14 @@ export class App implements OnInit, OnDestroy {
     return this.accountingSales().filter((sale) => sale.status === 'confirmed');
   }
 
+  accountingProductMovements(): Sale[] {
+    return this.accountingSales().filter((sale) => this.isProductSale(sale));
+  }
+
+  accountingServiceMovements(): Sale[] {
+    return this.accountingSales().filter((sale) => !this.isProductSale(sale));
+  }
+
   accountingTotal(): number {
     return this.sum(this.accountingConfirmedSales());
   }
@@ -1826,6 +1834,34 @@ export class App implements OnInit, OnDestroy {
 
   examinedNequiSales(): Sale[] {
     return this.examinedSales().filter((sale) => sale.payment_method === 'nequi');
+  }
+
+  examinedProductSales(): Sale[] {
+    return this.examinedSales().filter((sale) => this.isProductSale(sale));
+  }
+
+  examinedServiceSales(): Sale[] {
+    return this.examinedSales().filter((sale) => !this.isProductSale(sale));
+  }
+
+  examinedConfirmedProductSales(): Sale[] {
+    return this.examinedProductSales().filter((sale) => sale.status === 'confirmed');
+  }
+
+  examinedProductTotal(): number {
+    return this.sum(this.examinedConfirmedProductSales());
+  }
+
+  examinedProductCash(): number {
+    return this.sum(
+      this.examinedConfirmedProductSales().filter((sale) => sale.payment_method === 'cash'),
+    );
+  }
+
+  examinedProductNequi(): number {
+    return this.sum(
+      this.examinedConfirmedProductSales().filter((sale) => sale.payment_method === 'nequi'),
+    );
   }
 
   selectedClosure(): Closure | undefined {

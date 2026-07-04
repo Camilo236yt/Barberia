@@ -679,10 +679,24 @@
             <ng-template #noPending><div class="empty-state">Sin pagos pendientes en este día</div></ng-template>
           </section>
 
+          <section class="tool-panel full-span" *ngIf="accountingBarberFilterId === 'all'">
+            <div class="panel-heading">
+              <div><p>Ingresos propios de la sede</p><h2>Ventas de nevera · {{ accountingDate }}</h2></div>
+              <span class="status-pill">{{ accountingProductMovements().length }} productos</span>
+            </div>
+            <div class="payout-summary">
+              <div><span>Total de nevera</span><strong>{{ formatMoney(accountingProductTotal()) }}</strong></div>
+              <div><span>Recibido en efectivo</span><strong>{{ formatMoney(accountingProductCashTotal()) }}</strong></div>
+              <div><span>Recibido por Nequi</span><strong>{{ formatMoney(accountingProductNequiTotal()) }}</strong></div>
+              <div><span>Para la barbería</span><strong>{{ formatMoney(accountingProductTotal()) }}</strong></div>
+            </div>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: accountingProductMovements(), showBranch: false, allowActions: true, actionContext: 'accounting' }"></ng-container>
+          </section>
+
           <section class="tool-panel full-span">
             <div class="panel-heading">
-              <div><p>Movimientos diarios · {{ accountingFilterLabel() }}</p><h2>{{ accountingDate }} · {{ activeBranch()?.name }}</h2></div>
-              <span class="status-pill">{{ accountingSales().length }} registros</span>
+              <div><p>Servicios de barberos · {{ accountingFilterLabel() }}</p><h2>{{ accountingDate }} · {{ activeBranch()?.name }}</h2></div>
+              <span class="status-pill">{{ accountingServiceMovements().length }} registros</span>
             </div>
             <p
               class="form-message history-action-message"
@@ -741,7 +755,7 @@
                 {{ historySaleSaving ? 'Guardando...' : 'Guardar cambios' }}
               </button>
             </form>
-            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: accountingSales(), showBranch: false, allowActions: true, actionContext: 'accounting' }"></ng-container>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: accountingServiceMovements(), showBranch: false, allowActions: true, actionContext: 'accounting' }"></ng-container>
           </section>
 
           <section class="tool-panel full-span">
@@ -754,12 +768,6 @@
               <div><span>Total pagado en efectivo</span><strong>{{ formatMoney(accountingCash()) }}</strong></div>
               <div><span>Total recibido por Nequi</span><strong>{{ formatMoney(accountingNequi()) }}</strong></div>
               <div><span>Para la barbería del efectivo</span><strong>{{ formatMoney(accountingCashShopShareTotal()) }}</strong></div>
-            </div>
-            <div class="payout-summary fridge-accounting-summary" *ngIf="accountingBarberFilterId === 'all' && accountingProductSales().length">
-              <div><span>Ventas de nevera</span><strong>{{ formatMoney(accountingProductTotal()) }}</strong></div>
-              <div><span>Nevera en efectivo</span><strong>{{ formatMoney(accountingProductCashTotal()) }}</strong></div>
-              <div><span>Nevera por Nequi</span><strong>{{ formatMoney(accountingProductNequiTotal()) }}</strong></div>
-              <div><span>Corresponde a la barbería</span><strong>100%</strong></div>
             </div>
             <div class="barber-totals payout-grid">
               <article class="barber-total-card payout-card" *ngFor="let barber of accountingVisibleBarbers(); trackBy: trackById">
@@ -1014,6 +1022,8 @@
               <div><span>Pendientes</span><strong>{{ dayPendingNequi(examinedDate) }}</strong></div>
               <div><span>Ventas</span><strong>{{ examinedSales().length }}</strong></div>
               <div><span>Comprobantes</span><strong>{{ examinedNequiSales().length }}</strong></div>
+              <div><span>Total nevera</span><strong>{{ formatMoney(examinedProductTotal()) }}</strong></div>
+              <div><span>Productos vendidos</span><strong>{{ examinedProductSales().length }}</strong></div>
             </div>
             <div class="closure-barbers" *ngIf="selectedClosureBarbers().length">
               <span *ngFor="let barber of selectedClosureBarbers()">
@@ -1071,7 +1081,23 @@
                 {{ historySaleSaving ? 'Guardando...' : 'Guardar cambios' }}
               </button>
             </form>
-            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedSales(), showBranch: false, allowActions: true, actionContext: 'history' }"></ng-container>
+            <div class="panel-heading history-subsection-heading">
+              <div><p>Ingresos de la barbería</p><h3>Ventas de nevera</h3></div>
+              <span class="status-pill">{{ examinedProductSales().length }} productos</span>
+            </div>
+            <div class="payout-summary" *ngIf="examinedProductSales().length">
+              <div><span>Total</span><strong>{{ formatMoney(examinedProductTotal()) }}</strong></div>
+              <div><span>Efectivo</span><strong>{{ formatMoney(examinedProductCash()) }}</strong></div>
+              <div><span>Nequi</span><strong>{{ formatMoney(examinedProductNequi()) }}</strong></div>
+              <div><span>Para la barbería</span><strong>100%</strong></div>
+            </div>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedProductSales(), showBranch: false, allowActions: true, actionContext: 'history' }"></ng-container>
+
+            <div class="panel-heading history-subsection-heading">
+              <div><p>Trabajo realizado</p><h3>Servicios de barberos</h3></div>
+              <span class="status-pill">{{ examinedServiceSales().length }} servicios</span>
+            </div>
+            <ng-container *ngTemplateOutlet="salesTable; context: { salesList: examinedServiceSales(), showBranch: false, allowActions: true, actionContext: 'history' }"></ng-container>
           </section>
           <ng-template #chooseClosure><section class="tool-panel history-detail empty-history"><div class="empty-state">Selecciona un cierre para ver su contabilidad completa</div></section></ng-template>
         </div>
