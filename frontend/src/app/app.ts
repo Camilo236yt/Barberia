@@ -1872,9 +1872,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   accountingBarberCommission(barberId: string): number {
-    return (
-      Math.round(this.accountingBarberBaseTotal(barberId) * this.barberCommissionRate(barberId)) +
-      this.accountingBarberTip(barberId)
+    return Math.round(
+      this.accountingBarberTotal(barberId) * this.barberCommissionRate(barberId),
     );
   }
 
@@ -1905,19 +1904,16 @@ export class App implements OnInit, OnDestroy {
   }
 
   accountingBarberCashShopShare(barberId: string): number {
-    const cashBase = this.accountingBarberCashSales(barberId).reduce(
-      (total, sale) => total + this.saleBase(sale),
+    const cashTotal = this.accountingBarberCashSales(barberId).reduce(
+      (total, sale) => total + Number(sale.amount || 0),
       0,
     );
-    const barberShare = Math.round(cashBase * this.barberCommissionRate(barberId));
-    return cashBase - barberShare;
+    const barberShare = Math.round(cashTotal * this.barberCommissionRate(barberId));
+    return cashTotal - barberShare;
   }
 
   accountingBarberShopShare(barberId: string): number {
-    const baseCommission = Math.round(
-      this.accountingBarberBaseTotal(barberId) * this.barberCommissionRate(barberId),
-    );
-    return this.accountingBarberBaseTotal(barberId) - baseCommission;
+    return this.accountingBarberTotal(barberId) - this.accountingBarberCommission(barberId);
   }
 
   accountingPayrollTotal(): number {
@@ -2141,9 +2137,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   closureBarberCommission(barber: ClosureBarber): number {
-    const tip = Number(barber.tip_total || 0);
-    const base = Number(barber.base_total ?? barber.total - tip);
-    return Math.round(base * this.closureBarberRate(barber)) + tip;
+    return Math.round(Number(barber.total || 0) * this.closureBarberRate(barber));
   }
 
   accountingNequiReceivedByBarbers(): number {
@@ -2164,9 +2158,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   closureBarberShopShare(barber: ClosureBarber): number {
-    const tip = Number(barber.tip_total || 0);
-    const base = Number(barber.base_total ?? barber.total - tip);
-    return base - Math.round(base * this.closureBarberRate(barber));
+    const total = Number(barber.total || 0);
+    return total - Math.round(total * this.closureBarberRate(barber));
   }
 
   closureBarberNequi(barber: ClosureBarber): number {
@@ -2194,16 +2187,17 @@ export class App implements OnInit, OnDestroy {
   }
 
   closureBarberCashShopShare(barber: ClosureBarber): number {
-    if (barber.cash_shop_share !== undefined) return Number(barber.cash_shop_share || 0);
-    const cashBase = this.examinedSales()
+    const cashSales = this.examinedSales()
       .filter(
         (sale) =>
           sale.status === 'confirmed' &&
           sale.barber_id === barber.barber_id &&
           sale.payment_method === 'cash',
-      )
-      .reduce((total, sale) => total + this.saleBase(sale), 0);
-    return cashBase - Math.round(cashBase * this.closureBarberRate(barber));
+      );
+    const cashTotal = cashSales.length
+      ? this.sum(cashSales)
+      : Number(barber.cash_payment_total || 0);
+    return cashTotal - Math.round(cashTotal * this.closureBarberRate(barber));
   }
 
   selectExaminedClosure(closure: Closure): void {
@@ -2504,10 +2498,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   barberCommission(barberId: string): number {
-    const sales = this.confirmedSales().filter((sale) => sale.barber_id === barberId);
-    const tips = sales.reduce((total, sale) => total + this.saleTip(sale), 0);
-    const base = sales.reduce((total, sale) => total + this.saleBase(sale), 0);
-    return Math.round(base * this.barberCommissionRate(barberId)) + tips;
+    return Math.round(this.barberTotal(barberId) * this.barberCommissionRate(barberId));
   }
 
   barberCommissionRate(barberId: string): number {
