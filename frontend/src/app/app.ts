@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 
 type PaymentMethod = 'cash' | 'nequi';
 type SaleStatus = 'confirmed' | 'pending_review' | 'rejected' | 'annulled';
+type SaleKind = 'service' | 'product';
 type ClosureStatus = 'closed' | 'reopened';
 type ViewName = 'dashboard' | 'sales' | 'accounting' | 'history' | 'information';
 
@@ -33,7 +34,8 @@ interface Sale {
   created_at: string;
   branch_id: string;
   branch_name: string;
-  barber_id: string;
+  sale_kind?: SaleKind;
+  barber_id: string | null;
   barber_name: string;
   service_id: string;
   service_name: string;
@@ -207,6 +209,8 @@ export class App implements OnInit, OnDestroy {
   maxAdminDevices = 10;
 
   selectedServiceId = '';
+  saleKind: SaleKind = 'service';
+  fridgeProductName = 'Agua';
   isSpecialService = false;
   specialServiceName = '';
   selectedPayment: PaymentMethod = 'cash';
@@ -226,6 +230,8 @@ export class App implements OnInit, OnDestroy {
   accountingSaleMessageType: 'success' | 'error' | '' = '';
   accountingProofDataUrl = '';
   accountingProofPreviewUrl = '';
+  accountingSaleKind: SaleKind = 'service';
+  accountingFridgeProductName = 'Agua';
   accountingCustomServiceName = '';
   accountingSaleForm = {
     barber_id: '',
@@ -510,7 +516,11 @@ export class App implements OnInit, OnDestroy {
     if (!this.barbers.some((barber) => barber.id === this.saleForm.barber_id)) {
       this.saleForm.barber_id = this.barbers[0]?.id || '';
     }
-    if (!this.isSpecialService && !this.services.some((service) => service.id === this.selectedServiceId)) {
+    if (
+      this.saleKind === 'service' &&
+      !this.isSpecialService &&
+      !this.services.some((service) => service.id === this.selectedServiceId)
+    ) {
       this.selectedServiceId = '';
       if (this.services.length) this.selectService(this.services[0]);
     }
@@ -524,6 +534,7 @@ export class App implements OnInit, OnDestroy {
       this.accountingBarberFilterId = 'all';
     }
     if (
+      this.accountingSaleKind === 'service' &&
       this.accountingSaleForm.service_id !== 'especial' &&
       !this.services.some((service) => service.id === this.accountingSaleForm.service_id)
     ) {
@@ -546,6 +557,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   selectService(service: ServiceItem): void {
+    this.saleKind = 'service';
     this.isSpecialService = false;
     this.specialServiceName = '';
     this.selectedServiceId = service.id;
@@ -557,6 +569,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   selectSpecialService(): void {
+    this.saleKind = 'service';
     this.isSpecialService = true;
     this.selectedServiceId = '';
     this.specialServiceName = '';
@@ -568,12 +581,42 @@ export class App implements OnInit, OnDestroy {
   }
 
   newSaleTip(): number {
-    if (this.isSpecialService || !this.selectedServiceId) return 0;
+    if (this.saleKind === 'product' || this.isSpecialService || !this.selectedServiceId) return 0;
     return Math.max(0, Number(this.saleForm.amount || 0) - this.selectedServicePrice());
   }
 
+  selectSaleKind(kind: SaleKind): void {
+    this.saleKind = kind;
+    this.saleMessage = '';
+    if (kind === 'product') {
+      this.isSpecialService = false;
+      this.selectedServiceId = '';
+      if (!this.fridgeProductName.trim()) this.fridgeProductName = 'Agua';
+      this.saleForm.amount = 0;
+      return;
+    }
+    if (this.services.length) this.selectService(this.services[0]);
+  }
+
+  selectFridgeProduct(name: string): void {
+    this.saleKind = 'product';
+    this.fridgeProductName = name;
+  }
+
+  isProductSale(sale: Sale): boolean {
+    return sale.sale_kind === 'product' || !sale.barber_id;
+  }
+
+  saleResponsibleLabel(sale: Sale): string {
+    return this.isProductSale(sale) ? 'Barbería · Nevera' : sale.barber_name;
+  }
+
   accountingSaleTip(): number {
-    if (this.accountingSpecialService() || !this.accountingSaleForm.service_id) return 0;
+    if (
+      this.accountingSaleKind === 'product' ||
+      this.accountingSpecialService() ||
+      !this.accountingSaleForm.service_id
+    ) return 0;
     const price =
       this.services.find((service) => service.id === this.accountingSaleForm.service_id)?.price || 0;
     return Math.max(0, Number(this.accountingSaleForm.amount || 0) - price);
@@ -686,12 +729,20 @@ export class App implements OnInit, OnDestroy {
       this.showSaleMessage('La caja de esta barbería está cerrada.', 'error');
       return;
     }
-    if (!this.isSpecialService && !this.selectedServiceId) {
+    if (this.saleKind === 'service' && !this.isSpecialService && !this.selectedServiceId) {
       this.showSaleMessage('Selecciona un servicio.', 'error');
       return;
     }
-    if (this.isSpecialService && this.specialServiceName.trim().length < 2) {
+    if (
+      this.saleKind === 'service' &&
+      this.isSpecialService &&
+      this.specialServiceName.trim().length < 2
+    ) {
       this.showSaleMessage('Escribe el nombre del servicio especial.', 'error');
+      return;
+    }
+    if (this.saleKind === 'product' && this.fridgeProductName.trim().length < 2) {
+      this.showSaleMessage('Escribe el nombre del producto de la nevera.', 'error');
       return;
     }
     if (this.selectedPayment === 'nequi' && !this.proofDataUrl) {
@@ -705,9 +756,15 @@ export class App implements OnInit, OnDestroy {
         method: 'POST',
         body: JSON.stringify({
           branch_id: this.activeBranchId,
-          barber_id: this.saleForm.barber_id,
-          service_id: this.selectedServiceId,
-          custom_service_name: this.isSpecialService ? this.specialServiceName.trim() : '',
+          sale_kind: this.saleKind,
+          barber_id: this.saleKind === 'product' ? null : this.saleForm.barber_id,
+          service_id: this.saleKind === 'product' ? '' : this.selectedServiceId,
+          custom_service_name:
+            this.saleKind === 'product'
+              ? this.fridgeProductName.trim()
+              : this.isSpecialService
+                ? this.specialServiceName.trim()
+                : '',
           amount: Number(this.saleForm.amount),
           payment_method: this.selectedPayment,
           proof_image: this.proofDataUrl,
@@ -720,7 +777,7 @@ export class App implements OnInit, OnDestroy {
       this.proofDataUrl = '';
       this.proofPreviewUrl = '';
       this.specialServiceName = '';
-      if (this.services.length) this.selectService(this.services[0]);
+      if (this.saleKind === 'service' && this.services.length) this.selectService(this.services[0]);
       this.showSaleMessage(`Venta guardada en ${this.activeBranch()?.name}.`, 'success');
       await this.loadData(true);
     } catch (error) {
@@ -770,7 +827,7 @@ export class App implements OnInit, OnDestroy {
     this.editingSale = sale;
     this.saleEditContext = context;
     this.editSaleForm = {
-      barber_id: sale.barber_id,
+      barber_id: sale.barber_id || '',
       service_name: sale.service_name,
       amount: sale.amount,
       payment_method: sale.payment_method,
@@ -796,12 +853,13 @@ export class App implements OnInit, OnDestroy {
     this.editingSale = null;
   }
 
-  barberIsAvailable(barberId: string): boolean {
-    return this.barbers.some((barber) => barber.id === barberId);
+  barberIsAvailable(barberId: string | null): boolean {
+    return !!barberId && this.barbers.some((barber) => barber.id === barberId);
   }
 
   async saveSaleEdit(): Promise<void> {
     if (!this.editingSale || this.historySaleSaving) return;
+    const editingProduct = this.isProductSale(this.editingSale);
     this.historySaleSaving = true;
     try {
       await this.api(`/api/sales/${this.editingSale.id}`, {
@@ -813,7 +871,9 @@ export class App implements OnInit, OnDestroy {
         this.accountingMovementMessage = 'Movimiento modificado correctamente.';
         this.accountingMovementMessageType = 'success';
       } else {
-        this.historyActionMessage = 'Corte modificado correctamente.';
+        this.historyActionMessage = editingProduct
+          ? 'Venta de nevera modificada correctamente.'
+          : 'Corte modificado correctamente.';
         this.historyActionMessageType = 'success';
       }
       await this.loadData(true);
@@ -837,7 +897,7 @@ export class App implements OnInit, OnDestroy {
   ): Promise<void> {
     const inAccounting = context === 'accounting';
     const confirmed = window.confirm(
-      `¿Eliminar este ${inAccounting ? 'movimiento diario' : 'corte del historial'}?\n\n${this.saleDay(sale)} · ${sale.barber_name} · ${sale.service_name} · ${this.formatMoney(sale.amount)}\n\nEsta acción no se puede deshacer.`,
+      `¿Eliminar este ${inAccounting ? 'movimiento diario' : this.isProductSale(sale) ? 'producto del historial' : 'corte del historial'}?\n\n${this.saleDay(sale)} · ${this.saleResponsibleLabel(sale)} · ${sale.service_name} · ${this.formatMoney(sale.amount)}\n\nEsta acción no se puede deshacer.`,
     );
     if (!confirmed) return;
 
@@ -881,7 +941,7 @@ export class App implements OnInit, OnDestroy {
   async confirmShiftAmountEdit(sale: Sale): Promise<void> {
     if (this.shiftSaleSaving) return;
     if (Number(this.editingShiftAmount) <= 0) {
-      this.shiftActionMessage = 'El valor del corte debe ser mayor a cero.';
+      this.shiftActionMessage = 'El valor debe ser mayor a cero.';
       this.shiftActionMessageType = 'error';
       return;
     }
@@ -900,7 +960,9 @@ export class App implements OnInit, OnDestroy {
         }),
       });
       this.cancelShiftAmountEdit();
-      this.shiftActionMessage = 'Valor del corte modificado correctamente.';
+      this.shiftActionMessage = this.isProductSale(sale)
+        ? 'Valor del producto modificado correctamente.'
+        : 'Valor del corte modificado correctamente.';
       this.shiftActionMessageType = 'success';
       await this.loadData(true);
     } catch (error) {
@@ -914,7 +976,7 @@ export class App implements OnInit, OnDestroy {
 
   async deleteShiftSale(sale: Sale): Promise<void> {
     const confirmed = window.confirm(
-      `¿Eliminar este corte del resumen de turno?\n\n${sale.barber_name} · ${sale.service_name} · ${this.formatMoney(sale.amount)}\n\nEsta acción no se puede deshacer.`,
+      `¿Eliminar esta ${this.isProductSale(sale) ? 'venta de nevera' : 'venta del resumen de turno'}?\n\n${this.saleResponsibleLabel(sale)} · ${sale.service_name} · ${this.formatMoney(sale.amount)}\n\nEsta acción no se puede deshacer.`,
     );
     if (!confirmed) return;
 
@@ -924,7 +986,9 @@ export class App implements OnInit, OnDestroy {
         body: JSON.stringify({}),
       });
       if (this.editingShiftSaleId === sale.id) this.cancelShiftAmountEdit();
-      this.shiftActionMessage = 'Corte eliminado correctamente.';
+      this.shiftActionMessage = this.isProductSale(sale)
+        ? 'Venta de nevera eliminada correctamente.'
+        : 'Corte eliminado correctamente.';
       this.shiftActionMessageType = 'success';
       await this.loadData(true);
     } catch (error) {
@@ -1162,6 +1226,32 @@ export class App implements OnInit, OnDestroy {
     return this.activeSales().filter((sale) => sale.barber_id === this.saleForm.barber_id);
   }
 
+  fridgeSales(): Sale[] {
+    return this.activeSales().filter((sale) => this.isProductSale(sale));
+  }
+
+  shiftSummarySales(): Sale[] {
+    return this.saleKind === 'product' ? this.fridgeSales() : this.selectedBarberSales();
+  }
+
+  shiftSummaryTitle(): string {
+    return this.saleKind === 'product'
+      ? 'Nevera de la barbería'
+      : this.selectedBarber()?.name || 'Barbero';
+  }
+
+  shiftSummaryTotal(): number {
+    return this.sum(this.shiftSummarySales());
+  }
+
+  shiftSummaryCash(): number {
+    return this.sum(this.shiftSummarySales().filter((sale) => sale.payment_method === 'cash'));
+  }
+
+  shiftSummaryNequi(): number {
+    return this.sum(this.shiftSummarySales().filter((sale) => sale.payment_method === 'nequi'));
+  }
+
   selectedBarberTotal(): number {
     return this.sum(this.selectedBarberSales());
   }
@@ -1296,6 +1386,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   selectAccountingService(serviceId: string): void {
+    this.accountingSaleKind = 'service';
     this.accountingSaleForm.service_id = serviceId;
     this.accountingCustomServiceName = '';
     const service = this.services.find((item) => item.id === serviceId);
@@ -1304,6 +1395,19 @@ export class App implements OnInit, OnDestroy {
 
   accountingSpecialService(): boolean {
     return this.accountingSaleForm.service_id === 'especial';
+  }
+
+  selectAccountingSaleKind(kind: SaleKind): void {
+    this.accountingSaleKind = kind;
+    this.accountingSaleMessage = '';
+    if (kind === 'product') {
+      if (!this.accountingFridgeProductName.trim()) this.accountingFridgeProductName = 'Agua';
+      this.accountingSaleForm.amount = 0;
+      return;
+    }
+    const service = this.services[0];
+    this.accountingSaleForm.service_id = service?.id || '';
+    this.accountingSaleForm.amount = service?.price || 0;
   }
 
   async handleAccountingProofFile(event: Event): Promise<void> {
@@ -1337,13 +1441,28 @@ export class App implements OnInit, OnDestroy {
       this.accountingSaleMessageType = 'error';
       return;
     }
-    if (!this.accountingSaleForm.barber_id || !this.accountingSaleForm.service_id) {
+    if (
+      this.accountingSaleKind === 'service' &&
+      (!this.accountingSaleForm.barber_id || !this.accountingSaleForm.service_id)
+    ) {
       this.accountingSaleMessage = 'Selecciona el barbero y el servicio.';
       this.accountingSaleMessageType = 'error';
       return;
     }
-    if (this.accountingSpecialService() && this.accountingCustomServiceName.trim().length < 2) {
+    if (
+      this.accountingSaleKind === 'service' &&
+      this.accountingSpecialService() &&
+      this.accountingCustomServiceName.trim().length < 2
+    ) {
       this.accountingSaleMessage = 'Escribe el nombre del servicio especial.';
+      this.accountingSaleMessageType = 'error';
+      return;
+    }
+    if (
+      this.accountingSaleKind === 'product' &&
+      this.accountingFridgeProductName.trim().length < 2
+    ) {
+      this.accountingSaleMessage = 'Escribe el nombre del producto de la nevera.';
       this.accountingSaleMessageType = 'error';
       return;
     }
@@ -1367,13 +1486,20 @@ export class App implements OnInit, OnDestroy {
         method: 'POST',
         body: JSON.stringify({
           branch_id: this.activeBranchId,
-          barber_id: this.accountingSaleForm.barber_id,
-          service_id: this.accountingSpecialService()
+          sale_kind: this.accountingSaleKind,
+          barber_id:
+            this.accountingSaleKind === 'product'
+              ? null
+              : this.accountingSaleForm.barber_id,
+          service_id: this.accountingSaleKind === 'product' || this.accountingSpecialService()
             ? ''
             : this.accountingSaleForm.service_id,
-          custom_service_name: this.accountingSpecialService()
-            ? this.accountingCustomServiceName.trim()
-            : '',
+          custom_service_name:
+            this.accountingSaleKind === 'product'
+              ? this.accountingFridgeProductName.trim()
+              : this.accountingSpecialService()
+                ? this.accountingCustomServiceName.trim()
+                : '',
           amount: Number(this.accountingSaleForm.amount),
           payment_method: this.accountingSaleForm.payment_method,
           proof_image: this.accountingProofDataUrl,
@@ -1393,7 +1519,10 @@ export class App implements OnInit, OnDestroy {
       this.accountingProofDataUrl = '';
       this.accountingProofPreviewUrl = '';
       this.accountingCustomServiceName = '';
-      this.accountingSaleMessage = `Corte agregado a la facturación del ${this.accountingDate}.`;
+      this.accountingSaleMessage =
+        this.accountingSaleKind === 'product'
+          ? `Venta de nevera agregada al ${this.accountingDate}.`
+          : `Corte agregado a la facturación del ${this.accountingDate}.`;
       this.accountingSaleMessageType = 'success';
       await this.loadData(true);
     } catch (error) {
@@ -1534,6 +1663,26 @@ export class App implements OnInit, OnDestroy {
 
   accountingShopShare(): number {
     return this.accountingTotal() - this.accountingPayrollTotal();
+  }
+
+  accountingProductSales(): Sale[] {
+    return this.accountingConfirmedSales().filter((sale) => this.isProductSale(sale));
+  }
+
+  accountingProductTotal(): number {
+    return this.sum(this.accountingProductSales());
+  }
+
+  accountingProductCashTotal(): number {
+    return this.sum(
+      this.accountingProductSales().filter((sale) => sale.payment_method === 'cash'),
+    );
+  }
+
+  accountingProductNequiTotal(): number {
+    return this.sum(
+      this.accountingProductSales().filter((sale) => sale.payment_method === 'nequi'),
+    );
   }
 
   expenseType(expense: Expense): 'shop' | 'barber' {
@@ -1711,9 +1860,12 @@ export class App implements OnInit, OnDestroy {
   }
 
   accountingCashShopShareTotal(): number {
-    return this.barbers.reduce(
-      (total, barber) => total + this.accountingBarberCashShopShare(barber.id),
-      0,
+    return (
+      this.accountingProductCashTotal() +
+      this.barbers.reduce(
+        (total, barber) => total + this.accountingBarberCashShopShare(barber.id),
+        0,
+      )
     );
   }
 

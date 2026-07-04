@@ -242,6 +242,25 @@ def read_db():
             sale["branch_id"] = "barberia-1"
             sale["branch_name"] = "Barbería 1"
             changed = True
+        sale_kind = sale.get("sale_kind")
+        if sale_kind not in {"service", "product"}:
+            sale_kind = "product" if not sale.get("barber_id") else "service"
+            sale["sale_kind"] = sale_kind
+            changed = True
+        if sale_kind == "product":
+            amount = int(sale.get("amount", 0) or 0)
+            product_defaults = {
+                "barber_id": None,
+                "barber_name": "Barbería · Nevera",
+                "service_id": "nevera",
+                "base_amount": amount,
+                "listed_price": None,
+                "tip_amount": 0,
+            }
+            for field, value in product_defaults.items():
+                if sale.get(field) != value:
+                    sale[field] = value
+                    changed = True
 
     for expense in data["expenses"]:
         expense_type = expense.get("expense_type")
@@ -532,8 +551,9 @@ def refresh_closure_summary(db, date_key, branch):
         if barber_id not in barber_ids:
             barber_ids.append(barber_id)
     for sale in confirmed:
-        if sale.get("barber_id") not in barber_ids:
-            barber_ids.append(sale.get("barber_id"))
+        barber_id = sale.get("barber_id")
+        if barber_id and barber_id not in barber_ids:
+            barber_ids.append(barber_id)
 
     barber_totals = []
     for barber_id in barber_ids:
@@ -1751,6 +1771,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
 
     def create_sale(self):
         payload = self.read_json_body()
+        sale_kind = str(payload.get("sale_kind") or "service").strip()
+        if sale_kind not in {"service", "product"}:
+            raise ValueError("Selecciona si es un servicio o una venta de nevera.")
         payment_method = payload.get("payment_method")
         if payment_method not in {"cash", "nequi"}:
             raise ValueError("Selecciona efectivo o Nequi.")
@@ -1780,18 +1803,26 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             if sale_date == today_key() and is_day_closed(db, branch["id"], sale_date):
                 raise ValueError("La caja de esta barberia ya esta cerrada.")
 
-            barber = find_by_id(db["barbers"], payload.get("barber_id"))
-            if not barber or barber.get("branch_id") != branch["id"]:
-                raise ValueError("Barbero no encontrado.")
-
             custom_service_name = str(payload.get("custom_service_name") or "").strip()
-            if custom_service_name:
+            barber = None
+            if sale_kind == "product":
+                service_id = "nevera"
+                service_name = validated_name(custom_service_name, "producto de nevera")
+                listed_price = None
+                base_amount = amount
+                tip_amount = 0
+            else:
+                barber = find_by_id(db["barbers"], payload.get("barber_id"))
+                if not barber or barber.get("branch_id") != branch["id"]:
+                    raise ValueError("Barbero no encontrado.")
+
+            if sale_kind == "service" and custom_service_name:
                 service_id = "especial"
                 service_name = validated_name(custom_service_name, "servicio especial")
                 listed_price = None
                 base_amount = amount
                 tip_amount = 0
-            else:
+            elif sale_kind == "service":
                 service = find_by_id(db["services"], payload.get("service_id"))
                 if not service or service.get("branch_id") != branch["id"]:
                     raise ValueError("Servicio no encontrado.")
@@ -1813,8 +1844,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 "created_at": f"{sale_date}T{sale_time}:00",
                 "branch_id": branch["id"],
                 "branch_name": branch["name"],
-                "barber_id": barber["id"],
-                "barber_name": barber["name"],
+                "sale_kind": sale_kind,
+                "barber_id": barber["id"] if barber else None,
+                "barber_name": barber["name"] if barber else "Barbería · Nevera",
                 "service_id": service_id,
                 "service_name": service_name,
                 "amount": amount,
@@ -1859,16 +1891,19 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Esta venta pertenece a otra barberia."}, 403)
                 return
 
-            barber = find_by_id(db["barbers"], payload.get("barber_id"))
-            if barber and barber.get("branch_id") != branch_id:
-                raise ValueError("Selecciona un barbero valido.")
-            if not barber and payload.get("barber_id") != sale.get("barber_id"):
-                raise ValueError("Selecciona un barbero valido.")
+            is_product = sale.get("sale_kind") == "product" or not sale.get("barber_id")
+            barber = None
+            if not is_product:
+                barber = find_by_id(db["barbers"], payload.get("barber_id"))
+                if barber and barber.get("branch_id") != branch_id:
+                    raise ValueError("Selecciona un barbero valido.")
+                if not barber and payload.get("barber_id") != sale.get("barber_id"):
+                    raise ValueError("Selecciona un barbero valido.")
             if payment_method == "nequi" and not sale.get("proof_url"):
                 raise ValueError("No puedes cambiar a Nequi una venta que no tiene comprobante.")
 
-            listed_price = sale.get("listed_price")
-            if listed_price is None and sale.get("service_id") != "especial":
+            listed_price = None if is_product else sale.get("listed_price")
+            if not is_product and listed_price is None and sale.get("service_id") != "especial":
                 service = find_by_id(db["services"], sale.get("service_id"))
                 if service and service.get("branch_id") == branch_id:
                     listed_price = int(service["price"])
@@ -1876,12 +1911,17 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 listed_price = int(listed_price) if listed_price is not None else None
             except (TypeError, ValueError):
                 listed_price = None
-            tip_amount = max(0, amount - listed_price) if listed_price else 0
+            tip_amount = max(0, amount - listed_price) if listed_price and not is_product else 0
 
             sale.update(
                 {
-                    "barber_id": barber["id"] if barber else sale["barber_id"],
-                    "barber_name": barber["name"] if barber else sale["barber_name"],
+                    "sale_kind": "product" if is_product else "service",
+                    "barber_id": None if is_product else (
+                        barber["id"] if barber else sale["barber_id"]
+                    ),
+                    "barber_name": "Barbería · Nevera" if is_product else (
+                        barber["name"] if barber else sale["barber_name"]
+                    ),
                     "service_name": service_name,
                     "amount": amount,
                     "base_amount": amount - tip_amount,

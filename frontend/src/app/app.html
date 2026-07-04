@@ -208,7 +208,7 @@
             <div class="panel-heading">
               <div>
                 <p>Registro administrativo</p>
-                <h2>Nuevo corte · {{ activeBranch()?.name }}</h2>
+                <h2>{{ saleKind === 'product' ? 'Venta de nevera' : 'Nuevo corte' }} · {{ activeBranch()?.name }}</h2>
               </div>
               <span class="status-pill" [class.closed]="isCurrentDayClosed()" [class.online]="!isCurrentDayClosed()">
                 {{ isCurrentDayClosed() ? 'Caja cerrada' : 'Caja abierta' }}
@@ -217,7 +217,15 @@
 
             <div *ngIf="isCurrentDayClosed()" class="lock-banner">La caja está cerrada. Reábrela desde Contabilidad.</div>
             <fieldset [disabled]="isCurrentDayClosed()">
-              <div class="field">
+              <div class="field sale-kind-selector">
+                <span>¿Qué vas a facturar?</span>
+                <div class="segmented">
+                  <button class="segment" [class.active]="saleKind === 'service'" type="button" (click)="selectSaleKind('service')">Corte / servicio</button>
+                  <button class="segment" [class.active]="saleKind === 'product'" type="button" (click)="selectSaleKind('product')">Producto de nevera</button>
+                </div>
+              </div>
+
+              <div class="field" *ngIf="saleKind === 'service'">
                 <span>Barbero que realizó el servicio</span>
                 <div class="barber-choice-grid">
                   <button
@@ -232,7 +240,7 @@
                 </div>
               </div>
 
-              <div class="field">
+              <div class="field" *ngIf="saleKind === 'service'">
                 <span>Servicio</span>
                 <div class="service-grid">
                   <button
@@ -257,7 +265,7 @@
                 </div>
               </div>
 
-              <div class="special-service-panel" *ngIf="isSpecialService">
+              <div class="special-service-panel" *ngIf="saleKind === 'service' && isSpecialService">
                 <div>
                   <span class="special-badge">Oferta / precio especial</span>
                   <strong>Personaliza esta venta</strong>
@@ -275,10 +283,38 @@
                 </label>
               </div>
 
+              <div class="special-service-panel fridge-sale-panel" *ngIf="saleKind === 'product'">
+                <div>
+                  <span class="special-badge">Ingreso 100% de la barbería</span>
+                  <strong>Producto vendido</strong>
+                </div>
+                <div class="service-grid">
+                  <button class="service-button" [class.active]="fridgeProductName === 'Agua'" type="button" (click)="selectFridgeProduct('Agua')">
+                    <strong>Agua</strong>
+                    <span>Seleccionar</span>
+                  </button>
+                  <button class="service-button" [class.active]="fridgeProductName === 'Gaseosa'" type="button" (click)="selectFridgeProduct('Gaseosa')">
+                    <strong>Gaseosa</strong>
+                    <span>Seleccionar</span>
+                  </button>
+                </div>
+                <label class="field">
+                  <span>Nombre del producto</span>
+                  <input
+                    name="fridgeProductName"
+                    type="text"
+                    maxlength="60"
+                    placeholder="Ej. Agua, gaseosa, bebida energética"
+                    [(ngModel)]="fridgeProductName"
+                    required
+                  >
+                </label>
+              </div>
+
               <div class="two-cols">
                 <label class="field">
-                  <span>{{ isSpecialService ? 'Precio especial' : 'Valor cobrado' }}</span>
-                  <input name="amount" type="number" min="1" step="1000" [(ngModel)]="saleForm.amount" required>
+                  <span>{{ saleKind === 'product' ? 'Precio del producto' : isSpecialService ? 'Precio especial' : 'Valor cobrado' }}</span>
+                  <input name="amount" type="number" min="1" [attr.step]="saleKind === 'product' ? 500 : 1000" [(ngModel)]="saleForm.amount" required>
                 </label>
                 <label class="field">
                   <span>Cliente (opcional)</span>
@@ -314,7 +350,7 @@
               </div>
 
               <button class="primary-button" type="submit" [disabled]="saleSaving || proofProcessing">
-                {{ saleSaving ? 'Guardando venta…' : proofProcessing ? 'Preparando comprobante…' : 'Guardar venta en ' + activeBranch()?.name }}
+                {{ saleSaving ? 'Guardando venta…' : proofProcessing ? 'Preparando comprobante…' : (saleKind === 'product' ? 'Guardar venta de nevera' : 'Guardar venta en ' + activeBranch()?.name) }}
               </button>
             </fieldset>
             <p class="form-message" [class.success]="saleMessageType === 'success'" [class.error]="saleMessageType === 'error'">{{ saleMessage }}</p>
@@ -322,25 +358,26 @@
 
           <aside class="side-panel">
             <div class="panel-heading">
-              <div><p>Resumen del turno</p><h2>{{ selectedBarber()?.name }}</h2></div>
-              <strong>{{ formatMoney(selectedBarberTotal()) }}</strong>
+              <div><p>Resumen del turno</p><h2>{{ shiftSummaryTitle() }}</h2></div>
+              <strong>{{ formatMoney(shiftSummaryTotal()) }}</strong>
             </div>
             <div class="mini-stats">
-              <div><span>Cortes</span><strong>{{ selectedBarberSales().length }}</strong></div>
-              <div><span>Efectivo</span><strong>{{ formatMoney(selectedBarberCash()) }}</strong></div>
-              <div><span>Nequi</span><strong>{{ formatMoney(selectedBarberNequi()) }}</strong></div>
+              <div><span>{{ saleKind === 'product' ? 'Productos' : 'Cortes' }}</span><strong>{{ shiftSummarySales().length }}</strong></div>
+              <div><span>Efectivo</span><strong>{{ formatMoney(shiftSummaryCash()) }}</strong></div>
+              <div><span>Nequi</span><strong>{{ formatMoney(shiftSummaryNequi()) }}</strong></div>
             </div>
             <p class="form-message shift-action-message" [class.success]="shiftActionMessageType === 'success'" [class.error]="shiftActionMessageType === 'error'" *ngIf="shiftActionMessage">
               {{ shiftActionMessage }}
             </p>
-            <div class="activity-list" *ngIf="selectedBarberSales().length; else noBarberSales">
-              <article class="activity-item compact shift-sale-item" *ngFor="let sale of selectedBarberSales().slice(0, 8); trackBy: trackById">
+            <div class="activity-list" *ngIf="shiftSummarySales().length; else noBarberSales">
+              <article class="activity-item compact shift-sale-item" *ngFor="let sale of shiftSummarySales().slice(0, 8); trackBy: trackById">
                 <ng-container *ngIf="editingShiftSaleId !== sale.id; else shiftAmountEditor">
                   <div class="shift-sale-main">
                     <div>
                       <strong>{{ sale.service_name }}</strong>
                       <span class="sale-meta">{{ timeOnly(sale.created_at) }}</span>
                       <span class="tip-tag" *ngIf="saleTip(sale) > 0">Propina {{ formatMoney(saleTip(sale)) }}</span>
+                      <span class="tip-tag" *ngIf="isProductSale(sale)">Ingreso de la barbería</span>
                     </div>
                     <strong>{{ formatMoney(sale.amount) }}</strong>
                   </div>
@@ -352,7 +389,7 @@
                 <ng-template #shiftAmountEditor>
                   <form class="shift-value-editor" (ngSubmit)="confirmShiftAmountEdit(sale)">
                     <label>
-                      <span>Nuevo valor del corte</span>
+                      <span>Nuevo valor</span>
                       <input name="shiftAmount-{{ sale.id }}" type="number" min="1" step="1000" [(ngModel)]="editingShiftAmount" required>
                     </label>
                     <div class="shift-sale-actions">
@@ -444,18 +481,30 @@
           <div class="panel-heading">
             <div>
               <p>Facturación de fecha seleccionada</p>
-              <h2>Nuevo corte · {{ accountingDate }}</h2>
+              <h2>{{ accountingSaleKind === 'product' ? 'Venta de nevera' : 'Nuevo corte' }} · {{ accountingDate }}</h2>
             </div>
             <button class="small-button" type="button" (click)="closeAccountingSaleForm()">Cerrar</button>
           </div>
           <div class="accounting-sale-form-grid">
             <label class="field">
+              <span>Tipo de venta</span>
+              <select
+                name="accountingSaleKind"
+                [(ngModel)]="accountingSaleKind"
+                (ngModelChange)="selectAccountingSaleKind($event)"
+                required
+              >
+                <option value="service">Corte / servicio</option>
+                <option value="product">Producto de nevera</option>
+              </select>
+            </label>
+            <label class="field" *ngIf="accountingSaleKind === 'service'">
               <span>Barbero</span>
               <select name="accountingSaleBarber" [(ngModel)]="accountingSaleForm.barber_id" required>
                 <option *ngFor="let barber of barbers; trackBy: trackById" [value]="barber.id">{{ barber.name }}</option>
               </select>
             </label>
-            <label class="field">
+            <label class="field" *ngIf="accountingSaleKind === 'service'">
               <span>Servicio</span>
               <select
                 name="accountingSaleService"
@@ -469,16 +518,28 @@
                 <option value="especial">Servicio especial</option>
               </select>
             </label>
-            <label class="field" *ngIf="accountingSpecialService()">
+            <label class="field" *ngIf="accountingSaleKind === 'service' && accountingSpecialService()">
               <span>Nombre del servicio especial</span>
               <input name="accountingCustomService" type="text" minlength="2" maxlength="60" [(ngModel)]="accountingCustomServiceName" required>
             </label>
-            <label class="field">
-              <span>Valor cobrado</span>
-              <input name="accountingSaleAmount" type="number" min="1" step="1000" [(ngModel)]="accountingSaleForm.amount" required>
+            <label class="field" *ngIf="accountingSaleKind === 'product'">
+              <span>Producto de la nevera</span>
+              <input
+                name="accountingFridgeProduct"
+                type="text"
+                minlength="2"
+                maxlength="60"
+                placeholder="Ej. Agua o gaseosa"
+                [(ngModel)]="accountingFridgeProductName"
+                required
+              >
             </label>
             <label class="field">
-              <span>Hora del corte</span>
+              <span>{{ accountingSaleKind === 'product' ? 'Precio del producto' : 'Valor cobrado' }}</span>
+              <input name="accountingSaleAmount" type="number" min="1" [attr.step]="accountingSaleKind === 'product' ? 500 : 1000" [(ngModel)]="accountingSaleForm.amount" required>
+            </label>
+            <label class="field">
+              <span>Hora de la venta</span>
               <input name="accountingSaleTime" type="time" [(ngModel)]="accountingSaleForm.sale_time" required>
             </label>
             <label class="field">
@@ -516,7 +577,7 @@
           </div>
           <div class="accounting-sale-form-actions">
             <button class="primary-button" type="submit" [disabled]="accountingSaleSaving">
-              {{ accountingSaleSaving ? 'Guardando...' : 'Confirmar corte en ' + accountingDate }}
+              {{ accountingSaleSaving ? 'Guardando...' : (accountingSaleKind === 'product' ? 'Confirmar venta de nevera' : 'Confirmar corte en ' + accountingDate) }}
             </button>
             <button class="secondary-button" type="button" [disabled]="accountingSaleSaving" (click)="closeAccountingSaleForm()">Cancelar</button>
           </div>
@@ -598,7 +659,7 @@
               <article class="review-item" *ngFor="let sale of accountingPendingSales(); trackBy: trackById">
                 <div class="review-top">
                   <div>
-                    <strong>{{ sale.barber_name }} · {{ sale.service_name }}</strong>
+                    <strong>{{ saleResponsibleLabel(sale) }} · {{ sale.service_name }}</strong>
                     <span class="sale-meta">{{ saleDay(sale) }} · {{ timeOnly(sale.created_at) }} · {{ formatMoney(sale.amount) }}</span>
                   </div>
                   <span class="state-tag pending_review">Pendiente</span>
@@ -645,7 +706,7 @@
                 <button class="small-button" type="button" (click)="cancelSaleEdit()">Cancelar</button>
               </div>
               <div class="history-editor-grid">
-                <label>
+                <label *ngIf="!isProductSale(editingSale)">
                   <span>Barbero</span>
                   <select name="accountingEditBarber" [(ngModel)]="editSaleForm.barber_id" required>
                     <option *ngIf="!barberIsAvailable(editingSale.barber_id)" [value]="editingSale.barber_id">{{ editingSale.barber_name }} (histórico)</option>
@@ -653,7 +714,7 @@
                   </select>
                 </label>
                 <label>
-                  <span>Servicio</span>
+                  <span>{{ isProductSale(editingSale) ? 'Producto' : 'Servicio' }}</span>
                   <input name="accountingEditService" type="text" minlength="2" maxlength="60" [(ngModel)]="editSaleForm.service_name" required>
                 </label>
                 <label>
@@ -693,6 +754,12 @@
               <div><span>Total pagado en efectivo</span><strong>{{ formatMoney(accountingCash()) }}</strong></div>
               <div><span>Total recibido por Nequi</span><strong>{{ formatMoney(accountingNequi()) }}</strong></div>
               <div><span>Para la barbería del efectivo</span><strong>{{ formatMoney(accountingCashShopShareTotal()) }}</strong></div>
+            </div>
+            <div class="payout-summary fridge-accounting-summary" *ngIf="accountingBarberFilterId === 'all' && accountingProductSales().length">
+              <div><span>Ventas de nevera</span><strong>{{ formatMoney(accountingProductTotal()) }}</strong></div>
+              <div><span>Nevera en efectivo</span><strong>{{ formatMoney(accountingProductCashTotal()) }}</strong></div>
+              <div><span>Nevera por Nequi</span><strong>{{ formatMoney(accountingProductNequiTotal()) }}</strong></div>
+              <div><span>Corresponde a la barbería</span><strong>100%</strong></div>
             </div>
             <div class="barber-totals payout-grid">
               <article class="barber-total-card payout-card" *ngFor="let barber of accountingVisibleBarbers(); trackBy: trackById">
@@ -969,7 +1036,7 @@
                 <button class="small-button" type="button" (click)="cancelSaleEdit()">Cancelar</button>
               </div>
               <div class="history-editor-grid">
-                <label>
+                <label *ngIf="!isProductSale(editingSale)">
                   <span>Barbero</span>
                   <select name="editSaleBarber" [(ngModel)]="editSaleForm.barber_id" required>
                     <option *ngIf="!barberIsAvailable(editingSale.barber_id)" [value]="editingSale.barber_id">{{ editingSale.barber_name }} (histórico)</option>
@@ -977,7 +1044,7 @@
                   </select>
                 </label>
                 <label>
-                  <span>Servicio</span>
+                  <span>{{ isProductSale(editingSale) ? 'Producto' : 'Servicio' }}</span>
                   <input name="editSaleService" type="text" minlength="2" maxlength="60" [(ngModel)]="editSaleForm.service_name" required>
                 </label>
                 <label>
@@ -1107,7 +1174,7 @@
         <tr>
           <th>Fecha / hora</th>
           <th *ngIf="showBranch">Sede</th>
-          <th>Barbero</th>
+          <th>Responsable</th>
           <th>Servicio</th>
           <th>Pago</th>
           <th>Valor</th>
@@ -1119,7 +1186,7 @@
         <tr *ngFor="let sale of salesList; trackBy: trackById">
           <td data-label="Fecha">{{ saleDay(sale) }} · {{ timeOnly(sale.created_at) }}</td>
           <td data-label="Sede" *ngIf="showBranch">{{ sale.branch_name }}</td>
-          <td data-label="Barbero">{{ sale.barber_name }}</td>
+          <td data-label="Responsable">{{ saleResponsibleLabel(sale) }}</td>
           <td data-label="Servicio">{{ sale.service_name }}</td>
           <td data-label="Pago">
             <a *ngIf="sale.proof_url" [href]="sale.proof_url" target="_blank" rel="noopener">
@@ -1130,6 +1197,7 @@
           <td data-label="Valor">
             {{ formatMoney(sale.amount) }}
             <span class="tip-tag table-tip" *ngIf="saleTip(sale) > 0">Propina {{ formatMoney(saleTip(sale)) }}</span>
+            <span class="tip-tag table-tip" *ngIf="isProductSale(sale)">Nevera</span>
           </td>
           <td data-label="Estado"><span class="state-tag" [class.confirmed]="sale.status === 'confirmed'" [class.pending_review]="sale.status === 'pending_review'" [class.rejected]="sale.status === 'rejected'" [class.annulled]="sale.status === 'annulled'">{{ statusLabel(sale.status) }}</span></td>
           <td data-label="Acciones" *ngIf="allowActions">
