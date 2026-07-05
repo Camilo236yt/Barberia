@@ -471,9 +471,10 @@ def closure_snapshot(db, date_key, counted_cash, branch):
             if sale.get("payment_method") == "nequi"
         )
         barber_rate = barber_commission_rate(barber)
-        commission = int(round(total * barber_rate))
-        cash_shop_share = cash_payment_total - int(round(cash_payment_total * barber_rate))
-        nequi_shop_share = nequi_total - int(round(nequi_total * barber_rate))
+        base_commission = int(round(base_total * barber_rate))
+        commission = base_commission + tip_total
+        cash_shop_share = cash_base_total - int(round(cash_base_total * barber_rate))
+        nequi_shop_share = nequi_base_total - int(round(nequi_base_total * barber_rate))
         barber_totals.append(
             {
                 "barber_id": barber["id"],
@@ -490,7 +491,7 @@ def closure_snapshot(db, date_key, counted_cash, branch):
                 "nequi_shop_share": nequi_shop_share,
                 "commission_rate": barber_rate,
                 "commission": commission,
-                "shop_share": total - commission,
+                "shop_share": base_total - base_commission,
             }
         )
 
@@ -592,9 +593,10 @@ def refresh_closure_summary(db, date_key, branch):
             for sale in barber_sales
             if sale.get("payment_method") == "nequi"
         )
-        commission = int(round(total * rate))
-        cash_shop_share = cash_payment_total - int(round(cash_payment_total * rate))
-        nequi_shop_share = nequi_total - int(round(nequi_total * rate))
+        base_commission = int(round(base_total * rate))
+        commission = base_commission + tip_total
+        cash_shop_share = cash_base_total - int(round(cash_base_total * rate))
+        nequi_shop_share = nequi_base_total - int(round(nequi_base_total * rate))
         barber_totals.append(
             {
                 "barber_id": barber_id,
@@ -611,7 +613,7 @@ def refresh_closure_summary(db, date_key, branch):
                 "nequi_shop_share": nequi_shop_share,
                 "commission_rate": rate,
                 "commission": commission,
-                "shop_share": total - commission,
+                "shop_share": base_total - base_commission,
             }
         )
 

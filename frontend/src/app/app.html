@@ -343,7 +343,7 @@
               </div>
               <div class="tip-reference-card" *ngIf="newSaleTip() > 0">
                 <div><span>Precio base</span><strong>{{ formatMoney(selectedServicePrice()) }}</strong></div>
-                <div><span>Propina registrada</span><strong>{{ formatMoney(newSaleTip()) }}</strong></div>
+                <div><span>Propina para el barbero</span><strong>{{ formatMoney(newSaleTip()) }}</strong></div>
               </div>
 
               <div class="field">
@@ -585,7 +585,7 @@
               <strong>{{ formatMoney(accountingSaleForm.amount - accountingSaleTip()) }}</strong>
             </div>
             <div>
-              <span>Propina registrada</span>
+              <span>Propina para el barbero</span>
               <strong>{{ formatMoney(accountingSaleTip()) }}</strong>
             </div>
           </div>
@@ -800,19 +800,15 @@
                   <div class="cash-received"><span>Pagado en efectivo</span><strong>{{ formatMoney(accountingBarberCash(barber.id)) }}</strong></div>
                   <div class="nequi-received"><span>Recibió por Nequi</span><strong>{{ formatMoney(accountingBarberNequi(barber.id)) }}</strong></div>
                   <div class="cash-shop-share"><span>Para la barbería del efectivo</span><strong>{{ formatMoney(accountingBarberCashShopShare(barber.id)) }}</strong></div>
-                  <div class="tip-share"><span>Propina incluida en el total</span><strong>{{ formatMoney(accountingBarberTip(barber.id)) }}</strong></div>
+                  <div class="tip-share"><span>Propina</span><strong>{{ formatMoney(accountingBarberTip(barber.id)) }}</strong></div>
                 </div>
                 <div class="barber-final-summary">
                   <div><span>Dinero recibido</span><strong>{{ formatMoney(accountingBarberTotal(barber.id)) }}</strong></div>
-                  <div><span>Pago según porcentaje</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
+                  <div><span>Comisión y propina</span><strong>{{ formatMoney(accountingBarberCommission(barber.id)) }}</strong></div>
                   <div class="barber-deduction"><span>Descuentos</span><strong>− {{ formatMoney(accountingBarberDeductionTotal(barber.id)) }}</strong></div>
                   <div [class.negative]="accountingBarberNet(barber.id) < 0"><span>Pago final a {{ barber.name }}</span><strong>{{ formatMoney(accountingBarberNet(barber.id)) }}</strong></div>
                 </div>
-                <small>
-                  {{ accountingBarberCount(barber.id) }} servicios ·
-                  {{ formatMoney(accountingBarberTotal(barber.id)) }} × {{ commissionPercent(barber.id) }}% =
-                  {{ formatMoney(accountingBarberCommission(barber.id)) }}
-                </small>
+                <small>{{ accountingBarberCount(barber.id) }} servicios confirmados</small>
               </article>
             </div>
           </section>
@@ -833,7 +829,7 @@
             </div>
             <ng-template #barberExpenseSummary>
               <div class="expense-summary barber-expense-summary">
-                <div><span>Pago según porcentaje</span><strong>{{ formatMoney(accountingBarberCommission(accountingBarberFilterId)) }}</strong></div>
+                <div><span>Comisión y propina</span><strong>{{ formatMoney(accountingBarberCommission(accountingBarberFilterId)) }}</strong></div>
                 <div><span>Descuentos del barbero</span><strong>− {{ formatMoney(accountingBarberDeductionTotal(accountingBarberFilterId)) }}</strong></div>
                 <div [class.negative]="accountingBarberNet(accountingBarberFilterId) < 0">
                   <span>Pago final a {{ accountingFilterLabel() }}</span>
