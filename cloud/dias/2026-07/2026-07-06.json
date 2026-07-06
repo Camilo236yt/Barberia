@@ -2,7 +2,7 @@
     "version": 1,
     "month": "2026-07",
     "date": "2026-07-06",
-    "generated_at": "2026-07-06T01:27:10",
+    "generated_at": "2026-07-06T01:27:23",
     "branches": [
         {
             "id": "barberia-1",
@@ -159,7 +159,7 @@
             "branch_id": "barberia-1",
             "branch_name": "Barbería de Arriba",
             "closed_at": "2026-07-06T01:27:10",
-            "status": "closed",
+            "status": "reopened",
             "counted_cash": 0,
             "expected_cash": 0,
             "cash_difference": 0,
@@ -249,10 +249,14 @@
                     "cash_total": 0,
                     "nequi_confirmed": 0,
                     "sales_count": 0
+                },
+                {
+                    "type": "reopened",
+                    "at": "2026-07-06T01:27:23"
                 }
             ],
             "modified_at": "2026-07-06T01:27:03",
-            "reopened_at": "2026-07-06T00:54:08"
+            "reopened_at": "2026-07-06T01:27:23"
         }
     ],
     "expenses": []
