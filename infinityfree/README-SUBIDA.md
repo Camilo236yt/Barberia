@@ -59,3 +59,9 @@ la información temporal no quede expuesta ni vuelva a importarse.
 
 El botón de respaldo del sitio cloud confirma que MySQL ya tiene los datos. La
 copia histórica de GitHub del programa de escritorio se conserva y no se borra.
+
+## 6. GitHub y actualizaciones
+
+Para conectar los botones de respaldo y activar actualizaciones automáticas,
+sigue `CONFIGURAR-GITHUB.md`. Las credenciales se guardan como secretos y nunca
+se incluyen en el repositorio.

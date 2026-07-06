@@ -62,8 +62,11 @@ if (Test-Path -LiteralPath $PackagePath) {
   throw "El paquete ya existe: $PackagePath"
 }
 
-& tar.exe -a -cf $PackagePath -C $CloudRoot `
+& tar.exe -a -cf $PackagePath `
+  --exclude="htdocs/api/config.php" `
+  -C $CloudRoot `
   "README-SUBIDA.md" `
+  "CONFIGURAR-GITHUB.md" `
   "schema.sql" `
   "htdocs"
 if ($LASTEXITCODE -ne 0) {

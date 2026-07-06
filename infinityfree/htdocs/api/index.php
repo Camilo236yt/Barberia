@@ -524,6 +524,8 @@ function routePath(): string
     return $path === '' ? '/' : '/' . ltrim($path, '/');
 }
 
+require_once __DIR__ . '/github.php';
+
 if (defined('CAPITAN_GOLD_LIBRARY_ONLY') && CAPITAN_GOLD_LIBRARY_ONLY === true) {
     return;
 }
@@ -631,48 +633,84 @@ try {
     }
 
     if ($path === '/history-backups' && $method === 'GET') {
-        $months = [];
+        $localMonths = [];
         foreach (readState()['sales'] as $sale) {
             if (($sale['branch_id'] ?? '') === $branchId) {
                 $month = substr(itemDay($sale), 0, 7);
                 if (preg_match('/^\d{4}-\d{2}$/', $month)) {
-                    $months[$month] = true;
+                    $localMonths[$month] = true;
                 }
             }
         }
-        $months = array_keys($months);
-        rsort($months);
+        $localMonths = array_keys($localMonths);
+        rsort($localMonths);
+        $remoteMonths = [];
+        $remoteError = null;
+        try {
+            $remoteMonths = githubRemoteMonths();
+        } catch (Throwable $error) {
+            $remoteError = $error instanceof HttpError
+                ? $error->getMessage()
+                : 'No se pudo consultar GitHub.';
+        }
         jsonResponse([
-            'local_months' => $months,
-            'remote_months' => $months,
-            'status' => ['state' => 'success', 'message' => 'Datos protegidos en MySQL cloud.'],
-        ]);
-    }
-
-    if ($path === '/history-backup-status' && $method === 'GET') {
-        jsonResponse([
+            'local_months' => $localMonths,
+            'remote_months' => $remoteMonths,
+            'remote_error' => $remoteError,
             'status' => [
-                'state' => 'success',
-                'progress' => 100,
-                'message' => 'Datos sincronizados en MySQL cloud.',
-                'date' => todayKey(),
+                'state' => $remoteError === null ? 'success' : 'error',
+                'message' => $remoteError ?? 'GitHub y MySQL cloud están conectados.',
             ],
         ]);
     }
 
+    if ($path === '/history-backup-status' && $method === 'GET') {
+        jsonResponse(['status' => githubBackupStatus()]);
+    }
+
     if ($path === '/history-backups/download' && $method === 'POST') {
-        requestBody();
-        jsonResponse(['ok' => true, 'downloaded' => 0, 'skipped' => 1]);
+        $payload = requestBody();
+        $month = trim((string)($payload['month'] ?? ''));
+        $download = githubDownloadMonth($month);
+        mutateState(function (array &$state) use ($download): array {
+            $incoming = $download['state'];
+            foreach (['branches', 'barbers', 'services', 'sales', 'closures', 'expenses'] as $key) {
+                $state[$key] = mergeById($state[$key] ?? [], $incoming[$key] ?? []);
+            }
+            $state['settings'] = array_merge(
+                $state['settings'] ?? [],
+                $incoming['settings'] ?? []
+            );
+            $state = normalizeState($state);
+            return ['ok' => true];
+        });
+        $uploadsDirectory = dirname(__DIR__) . '/uploads';
+        if (!is_dir($uploadsDirectory)) {
+            @mkdir($uploadsDirectory, 0755, true);
+        }
+        foreach ($download['proofs'] as $filename => $content) {
+            file_put_contents($uploadsDirectory . '/' . $filename, $content, LOCK_EX);
+        }
+        jsonResponse([
+            'ok' => true,
+            'month' => $month,
+            'downloaded' => $download['files'],
+            'skipped' => 0,
+            'proofs' => count($download['proofs']),
+        ]);
     }
 
     if ($path === '/history-backups/upload' && $method === 'POST') {
         $payload = requestBody();
         $date = trim((string)($payload['date'] ?? todayKey()));
+        $backup = githubBackupWithStatus($date);
         jsonResponse([
             'ok' => true,
             'backup_date' => $date,
-            'message' => "Los datos del $date ya están guardados en MySQL cloud.",
-        ], 202);
+            'commit' => $backup['commit'],
+            'proofs_uploaded' => $backup['proofs_uploaded'],
+            'message' => "Los datos del $date se guardaron correctamente en GitHub.",
+        ]);
     }
 
     if ($path === '/barbers' && $method === 'POST') {
@@ -1004,6 +1042,11 @@ try {
             }
             return ['closure' => $closure, 'backup_date' => $date];
         });
+        try {
+            githubBackupWithStatus((string)$result['backup_date']);
+        } catch (Throwable $backupError) {
+            error_log('GitHub backup after close: ' . $backupError->getMessage());
+        }
         jsonResponse($result);
     }
 
@@ -1023,6 +1066,11 @@ try {
             );
             return ['closure' => $state['closures'][$index], 'backup_date' => $date];
         });
+        try {
+            githubBackupWithStatus((string)$result['backup_date']);
+        } catch (Throwable $backupError) {
+            error_log('GitHub backup after reopen: ' . $backupError->getMessage());
+        }
         jsonResponse($result);
     }
 

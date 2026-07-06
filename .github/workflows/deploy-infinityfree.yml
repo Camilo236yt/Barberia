@@ -1,0 +1,70 @@
+name: Actualizar InfinityFree
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/src/**"
+      - "frontend/public/**"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - "infinityfree/**"
+      - ".github/workflows/deploy-infinityfree.yml"
+
+concurrency:
+  group: infinityfree-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: vars.INFINITYFREE_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el programa
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Preparar Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Compilar la interfaz
+        run: |
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+
+      - name: Preparar archivos de InfinityFree
+        run: |
+          mkdir -p deploy
+          cp -a infinityfree/htdocs/. deploy/
+          cp -a frontend/dist/frontend/browser/. deploy/
+          cp infinityfree/cloud-config.cloud.js deploy/cloud-config.js
+
+      - name: Publicar por FTP
+        uses: SamKirkland/FTP-Deploy-Action@110f9186c050f71550953127052e77650219c287
+        with:
+          server: ${{ secrets.INFINITYFREE_FTP_SERVER }}
+          username: ${{ secrets.INFINITYFREE_FTP_USERNAME }}
+          password: ${{ secrets.INFINITYFREE_FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./deploy/
+          server-dir: /htdocs/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            api/config.php
+            api/migration-data*.json
+            uploads/**
+            importar.html
