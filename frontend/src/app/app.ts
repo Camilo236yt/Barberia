@@ -540,9 +540,15 @@ export class App implements OnInit, OnDestroy {
       if (currentClosure?.status === 'closed') this.countedCash = currentClosure.counted_cash;
       if (!this.examinedDate) {
         const latestClosure = this.orderedClosures()[0];
-        this.examinedDate = latestClosure?.date || '';
+        const latestBilledDate =
+          [...new Set(
+            this.branchSales()
+              .filter((sale) => sale.status !== 'annulled' && sale.status !== 'rejected')
+              .map((sale) => this.saleDay(sale)),
+          )].sort().reverse()[0] || '';
+        this.examinedDate = latestClosure?.date || latestBilledDate || '';
         this.examinedBranchId = this.activeBranchId;
-        if (latestClosure?.date) this.historyMonthKey = latestClosure.date.slice(0, 7);
+        if (this.examinedDate) this.historyMonthKey = this.examinedDate.slice(0, 7);
       }
       this.isOnline = true;
       if (this.cloudHosted) this.realtimeConnected = true;

@@ -837,14 +837,24 @@ def combined_history(db):
 
 def prepare_existing_history_archives(db):
     created_dates = []
-    closure_dates = sorted(
+    archive_dates = sorted(
         {
             str(closure.get("date") or "")
             for closure in db["closures"]
             if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(closure.get("date") or ""))
         }
+        | {
+            item_day(sale)
+            for sale in db.get("sales", [])
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", item_day(sale))
+        }
+        | {
+            str(expense.get("date") or "")
+            for expense in db.get("expenses", [])
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(expense.get("date") or ""))
+        }
     )
-    for date_key in closure_dates:
+    for date_key in archive_dates:
         if not (HISTORY_ARCHIVE_DIR / f"{date_key}.zip").exists():
             write_history_archive(db, date_key)
             created_dates.append(date_key)
@@ -1216,9 +1226,207 @@ class BarberiaHandler(BaseHTTPRequestHandler):
         publish_data_change()
         self.send_json({"role": role, "branch": branch})
 
+    def barber_portal_options(self):
+        with LOCK:
+            db = read_db()
+            branches = [
+                branch
+                for branch in db["branches"]
+                if branch.get("active", True)
+            ]
+            branch_ids = {branch.get("id") for branch in branches}
+            barbers = [
+                barber
+                for barber in db["barbers"]
+                if barber.get("active", True) and barber.get("branch_id") in branch_ids
+            ]
+            services = [
+                service
+                for service in db["services"]
+                if service.get("branch_id") in branch_ids
+            ]
+            settings = db.get("settings", {})
+        self.send_json(
+            {
+                "branches": branches,
+                "barbers": barbers,
+                "services": services,
+                "settings": settings,
+                "date": today_key(),
+            }
+        )
+
+    def barber_portal_bootstrap(self, parsed):
+        query = parse_qs(parsed.query)
+        barber_id = (query.get("barber_id") or [""])[0].strip()
+        date_key = (query.get("date") or [today_key()])[0].strip() or today_key()
+        try:
+            parsed_date = dt.date.fromisoformat(date_key)
+        except ValueError:
+            self.send_json({"error": "Fecha no valida."}, 400)
+            return
+        if parsed_date > dt.date.today():
+            self.send_json({"error": "No se puede consultar una fecha futura."}, 400)
+            return
+
+        with LOCK:
+            db = read_db()
+            barber = find_by_id(db["barbers"], barber_id)
+            if not barber or not barber.get("active", True):
+                self.send_json({"error": "Selecciona un barbero valido."}, 404)
+                return
+            branch = find_by_id(db["branches"], barber.get("branch_id"))
+            if not branch or not branch.get("active", True):
+                self.send_json({"error": "La barberia de este barbero no esta activa."}, 404)
+                return
+            history_sales, history_closures, history_expenses = combined_history(db)
+            sales = [
+                sale
+                for sale in history_sales
+                if item_day(sale) == date_key
+                and sale.get("barber_id") == barber_id
+                and sale.get("status") not in {"annulled", "rejected"}
+            ]
+            expenses = [
+                expense
+                for expense in history_expenses
+                if expense.get("date") == date_key
+                and expense.get("expense_type") == "barber"
+                and expense.get("barber_id") == barber_id
+            ]
+            closures = [
+                closure
+                for closure in history_closures
+                if closure.get("date") == date_key
+                and closure.get("branch_id") == branch["id"]
+            ]
+            services = [
+                service
+                for service in db["services"]
+                if service.get("branch_id") == branch["id"]
+            ]
+            settings = db.get("settings", {})
+        self.send_json(
+            {
+                "branch": branch,
+                "barber": barber,
+                "services": services,
+                "sales": sales,
+                "expenses": expenses,
+                "closures": closures,
+                "settings": settings,
+                "date": date_key,
+                "closed": any(closure.get("status") == "closed" for closure in closures),
+            }
+        )
+
+    def create_barber_portal_sale(self):
+        payload = self.read_json_body()
+        barber_id = str(payload.get("barber_id") or "").strip()
+        client_request_id = str(payload.get("client_request_id") or "").strip()
+        if client_request_id and not re.fullmatch(r"[A-Za-z0-9-]{8,160}", client_request_id):
+            raise ValueError("El identificador local de la venta no es valido.")
+        payment_method = payload.get("payment_method")
+        if payment_method not in {"cash", "nequi"}:
+            raise ValueError("Selecciona efectivo o Nequi.")
+        amount = money_to_int(payload.get("amount"))
+        if not amount:
+            raise ValueError("El valor cobrado debe ser mayor a cero.")
+
+        sale_date = today_key()
+        sale_time = dt.datetime.now().strftime("%H:%M")
+        with LOCK:
+            db = read_db()
+            barber = find_by_id(db["barbers"], barber_id)
+            if not barber or not barber.get("active", True):
+                raise ValueError("Selecciona un barbero valido.")
+            branch = find_by_id(db["branches"], barber.get("branch_id"))
+            if not branch or not branch.get("active", True):
+                raise ValueError("La barberia de este barbero no esta activa.")
+            if is_day_closed(db, branch["id"], sale_date):
+                raise ValueError("La caja de esta barberia ya esta cerrada.")
+            if client_request_id:
+                existing_sale = next(
+                    (
+                        sale
+                        for sale in db["sales"]
+                        if sale.get("client_request_id") == client_request_id
+                        and sale.get("barber_id") == barber_id
+                    ),
+                    None,
+                )
+                if existing_sale:
+                    self.send_json({"sale": existing_sale, "already_synchronized": True})
+                    return
+
+            custom_service_name = str(payload.get("custom_service_name") or "").strip()
+            if custom_service_name:
+                service_id = "especial"
+                service_name = validated_name(custom_service_name, "servicio especial")
+                listed_price = None
+                base_amount = amount
+                tip_amount = 0
+            else:
+                service = find_by_id(db["services"], payload.get("service_id"))
+                if not service or service.get("branch_id") != branch["id"]:
+                    raise ValueError("Servicio no encontrado.")
+                service_id = service["id"]
+                service_name = service["name"]
+                listed_price = int(service["price"])
+                tip_amount = max(0, amount - listed_price)
+                base_amount = amount - tip_amount
+
+            sale_id = uuid.uuid4().hex[:12]
+            proof_url = None
+            if payment_method == "nequi":
+                proof_url = save_proof_image(payload.get("proof_image"), sale_id)
+                if not proof_url:
+                    raise ValueError("El comprobante de Nequi es obligatorio.")
+
+            sale = {
+                "id": sale_id,
+                "client_request_id": client_request_id or None,
+                "created_at": f"{sale_date}T{sale_time}:00",
+                "branch_id": branch["id"],
+                "branch_name": branch["name"],
+                "sale_kind": "service",
+                "barber_id": barber["id"],
+                "barber_name": barber["name"],
+                "service_id": service_id,
+                "service_name": service_name,
+                "amount": amount,
+                "base_amount": base_amount,
+                "listed_price": listed_price,
+                "tip_amount": tip_amount,
+                "payment_method": payment_method,
+                "proof_url": proof_url,
+                "proof_note": (payload.get("proof_note") or "").strip(),
+                "client_name": (payload.get("client_name") or "").strip(),
+                "status": "confirmed" if payment_method == "cash" else "pending_review",
+                "created_by": "barber_portal",
+            }
+            db["sales"].insert(0, sale)
+            refresh_closure_summary(db, sale_date, branch)
+            write_db(db)
+            if find_closure(db, sale_date, branch["id"]) or (
+                HISTORY_ARCHIVE_DIR / f"{sale_date}.zip"
+            ).exists():
+                write_history_archive(db, sale_date)
+                queue_history_backup(sale_date)
+        publish_data_change()
+        self.send_json({"sale": sale}, 201)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if path == "/api/barber-portal/options":
+            self.barber_portal_options()
+            return
+
+        if path == "/api/barber-portal/bootstrap":
+            self.barber_portal_bootstrap(parsed)
+            return
 
         if path == "/api/admin/options":
             role = self.require_admin_role()
@@ -1300,7 +1508,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/barbero"):
-            self.send_redirect("/admin/barberia-1")
+            self.serve_public("/barbero.html")
             return
 
         if path.startswith(("/cita", "/agenda", "/agendar")):
@@ -1319,6 +1527,9 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/local-ui/close":
                 self.local_ui_session(closing=True)
+                return
+            if path == "/api/barber-portal/sales":
+                self.create_barber_portal_sale()
                 return
             if path == "/api/admin/select-branch":
                 role = self.require_admin_role()
@@ -1452,6 +1663,8 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             return
 
         safe_path = request_path.lstrip("/") or "index.html"
+        if request_path.rstrip("/") == "/barbero":
+            safe_path = "barbero.html"
         target = (public_dir / safe_path).resolve()
         if not str(target).startswith(str(public_dir.resolve())) or not target.exists() or target.is_dir():
             target = public_dir / "index.html"

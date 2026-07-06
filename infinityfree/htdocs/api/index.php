@@ -452,6 +452,180 @@ function saveProof(?string $dataUrl, string $saleId): ?string
     return '/uploads/' . $filename;
 }
 
+function barberPortalOptions(): never
+{
+    $state = readState();
+    $branches = array_values(array_filter(
+        $state['branches'],
+        fn(array $branch): bool => ($branch['active'] ?? true) !== false
+    ));
+    $branchIds = array_map(fn(array $branch): string => (string)($branch['id'] ?? ''), $branches);
+    $barbers = array_values(array_filter(
+        $state['barbers'],
+        fn(array $barber): bool =>
+            ($barber['active'] ?? true) !== false &&
+            in_array((string)($barber['branch_id'] ?? ''), $branchIds, true)
+    ));
+    $services = array_values(array_filter(
+        $state['services'],
+        fn(array $service): bool => in_array((string)($service['branch_id'] ?? ''), $branchIds, true)
+    ));
+    jsonResponse([
+        'branches' => $branches,
+        'barbers' => $barbers,
+        'services' => $services,
+        'settings' => $state['settings'],
+        'date' => todayKey(),
+    ]);
+}
+
+function barberPortalBootstrap(): never
+{
+    $barberId = trim((string)($_GET['barber_id'] ?? ''));
+    $date = trim((string)($_GET['date'] ?? todayKey()));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $date > todayKey()) {
+        throw new HttpError('Selecciona una fecha válida.');
+    }
+    $state = readState();
+    $barberIndex = findIndex($state['barbers'], $barberId);
+    if ($barberIndex < 0 || ($state['barbers'][$barberIndex]['active'] ?? true) === false) {
+        throw new HttpError('Selecciona un barbero válido.', 404);
+    }
+    $barber = $state['barbers'][$barberIndex];
+    $branchIndex = findIndex($state['branches'], (string)($barber['branch_id'] ?? ''));
+    if ($branchIndex < 0 || ($state['branches'][$branchIndex]['active'] ?? true) === false) {
+        throw new HttpError('La barbería de este barbero no está activa.', 404);
+    }
+    $branch = $state['branches'][$branchIndex];
+    $sales = array_values(array_filter(
+        $state['sales'],
+        fn(array $sale): bool =>
+            itemDay($sale) === $date &&
+            ($sale['barber_id'] ?? '') === $barberId &&
+            !in_array($sale['status'] ?? '', ['annulled', 'rejected'], true)
+    ));
+    $expenses = array_values(array_filter(
+        $state['expenses'],
+        fn(array $expense): bool =>
+            ($expense['date'] ?? '') === $date &&
+            ($expense['expense_type'] ?? '') === 'barber' &&
+            ($expense['barber_id'] ?? '') === $barberId
+    ));
+    $closures = array_values(array_filter(
+        $state['closures'],
+        fn(array $closure): bool =>
+            ($closure['date'] ?? '') === $date &&
+            ($closure['branch_id'] ?? '') === ($branch['id'] ?? '')
+    ));
+    $services = array_values(array_filter(
+        $state['services'],
+        fn(array $service): bool => ($service['branch_id'] ?? '') === ($branch['id'] ?? '')
+    ));
+    jsonResponse([
+        'branch' => $branch,
+        'barber' => $barber,
+        'services' => $services,
+        'sales' => $sales,
+        'expenses' => $expenses,
+        'closures' => $closures,
+        'settings' => $state['settings'],
+        'date' => $date,
+        'closed' => count(array_filter($closures, fn(array $closure): bool => ($closure['status'] ?? '') === 'closed')) > 0,
+    ]);
+}
+
+function createBarberPortalSale(): never
+{
+    $payload = requestBody();
+    $result = mutateState(function (array &$state) use ($payload): array {
+        $barberId = trim((string)($payload['barber_id'] ?? ''));
+        $requestId = trim((string)($payload['client_request_id'] ?? ''));
+        if ($requestId !== '' && !preg_match('/^[A-Za-z0-9-]{8,160}$/', $requestId)) {
+            throw new HttpError('El identificador local de la venta no es válido.');
+        }
+        $barberIndex = findIndex($state['barbers'], $barberId);
+        if ($barberIndex < 0 || ($state['barbers'][$barberIndex]['active'] ?? true) === false) {
+            throw new HttpError('Selecciona un barbero válido.');
+        }
+        $barber = $state['barbers'][$barberIndex];
+        $branchId = (string)($barber['branch_id'] ?? '');
+        $branchIndex = findIndex($state['branches'], $branchId);
+        if ($branchIndex < 0 || ($state['branches'][$branchIndex]['active'] ?? true) === false) {
+            throw new HttpError('La barbería de este barbero no está activa.');
+        }
+        $date = todayKey();
+        $closureIndex = findClosureIndex($state, $date, $branchId);
+        if ($closureIndex >= 0 && ($state['closures'][$closureIndex]['status'] ?? '') === 'closed') {
+            throw new HttpError('La caja de esta barbería ya está cerrada.');
+        }
+        if ($requestId !== '') {
+            foreach ($state['sales'] as $existing) {
+                if (($existing['client_request_id'] ?? '') === $requestId && ($existing['barber_id'] ?? '') === $barberId) {
+                    return ['sale' => $existing, 'already_synchronized' => true];
+                }
+            }
+        }
+        $payment = (string)($payload['payment_method'] ?? '');
+        if (!in_array($payment, ['cash', 'nequi'], true)) {
+            throw new HttpError('Selecciona efectivo o Nequi.');
+        }
+        $amount = money($payload['amount'] ?? 0);
+        $custom = trim((string)($payload['custom_service_name'] ?? ''));
+        if ($custom !== '') {
+            $serviceId = 'especial';
+            $serviceName = requiredName($custom, 'servicio especial');
+            $listedPrice = null;
+            $baseAmount = $amount;
+            $tipAmount = 0;
+        } else {
+            $serviceIndex = findIndex($state['services'], (string)($payload['service_id'] ?? ''));
+            if ($serviceIndex < 0 || ($state['services'][$serviceIndex]['branch_id'] ?? '') !== $branchId) {
+                throw new HttpError('Servicio no encontrado.');
+            }
+            $service = $state['services'][$serviceIndex];
+            $serviceId = $service['id'];
+            $serviceName = $service['name'];
+            $listedPrice = (int)$service['price'];
+            $tipAmount = max(0, $amount - $listedPrice);
+            $baseAmount = $amount - $tipAmount;
+        }
+        $saleId = newId();
+        $proof = null;
+        if ($payment === 'nequi') {
+            $proof = saveProof((string)($payload['proof_image'] ?? ''), $saleId);
+            if ($proof === null) {
+                throw new HttpError('El comprobante de Nequi es obligatorio.');
+            }
+        }
+        $sale = [
+            'id' => $saleId,
+            'client_request_id' => $requestId ?: null,
+            'created_at' => $date . 'T' . date('H:i') . ':00',
+            'branch_id' => $branchId,
+            'branch_name' => $state['branches'][$branchIndex]['name'] ?? 'Barbería',
+            'sale_kind' => 'service',
+            'barber_id' => $barber['id'],
+            'barber_name' => $barber['name'],
+            'service_id' => $serviceId,
+            'service_name' => $serviceName,
+            'amount' => $amount,
+            'base_amount' => $baseAmount,
+            'listed_price' => $listedPrice,
+            'tip_amount' => $tipAmount,
+            'payment_method' => $payment,
+            'proof_url' => $proof,
+            'proof_note' => substr(trim((string)($payload['proof_note'] ?? '')), 0, 120),
+            'client_name' => substr(trim((string)($payload['client_name'] ?? '')), 0, 80),
+            'status' => $payment === 'cash' ? 'confirmed' : 'pending_review',
+            'created_by' => 'barber_portal',
+        ];
+        array_unshift($state['sales'], $sale);
+        refreshClosure($state, $date, $state['branches'][$branchIndex]);
+        return ['sale' => $sale];
+    });
+    jsonResponse($result, isset($result['already_synchronized']) ? 200 : 201);
+}
+
 function authenticate(): string
 {
     $cfg = config();
@@ -570,6 +744,18 @@ try {
         });
         $result['migration_file_deleted'] = @unlink($file);
         jsonResponse($result);
+    }
+
+    if ($path === '/barber-portal/options' && $method === 'GET') {
+        barberPortalOptions();
+    }
+
+    if ($path === '/barber-portal/bootstrap' && $method === 'GET') {
+        barberPortalBootstrap();
+    }
+
+    if ($path === '/barber-portal/sales' && $method === 'POST') {
+        createBarberPortalSale();
     }
 
     $deviceId = authenticate();
