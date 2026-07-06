@@ -70,60 +70,25 @@
       Esta operación combina la información por identificador, por lo que no
       duplica ventas, cierres ni gastos.
     </p>
-    <label for="secret">Clave de importación</label>
-    <input id="secret" type="password" autocomplete="off">
-    <button id="importButton" type="button">Importar todos los datos</button>
-    <div id="result" role="status"></div>
+    <form
+      method="post"
+      action="/api/migrar-datos"
+      onsubmit="return confirm('¿Importar ahora todos los datos anteriores?')"
+    >
+      <label for="secret">Clave de importación</label>
+      <input
+        id="secret"
+        name="import_secret"
+        type="password"
+        autocomplete="off"
+        required
+      >
+      <button type="submit">Importar todos los datos</button>
+    </form>
+    <p>
+      Al terminar, el navegador mostrará el número de ventas, cierres y gastos
+      importados.
+    </p>
   </main>
-  <script>
-    const button = document.querySelector('#importButton');
-    const secret = document.querySelector('#secret');
-    const result = document.querySelector('#result');
-
-    button.addEventListener('click', async () => {
-      if (!secret.value.trim()) {
-        result.className = 'error';
-        result.textContent = 'Escribe la clave de importación.';
-        return;
-      }
-      if (!confirm('¿Importar ahora todos los datos anteriores?')) return;
-
-      button.disabled = true;
-      button.textContent = 'Importando…';
-      result.className = '';
-      result.textContent = '';
-
-      try {
-        const response = await fetch('/api/import', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Import-Secret': secret.value.trim()
-          },
-          body: '{}'
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error || 'No se pudo completar la importación.');
-        }
-        result.className = 'ok';
-        result.textContent =
-          `Importación terminada correctamente.\n` +
-          `Ventas: ${payload.sales}\n` +
-          `Cierres: ${payload.closures}\n` +
-          `Gastos: ${payload.expenses}\n\n` +
-          `Ya puedes eliminar importar.html del servidor.`;
-        button.textContent = 'Importación terminada';
-        secret.value = '';
-      } catch (error) {
-        result.className = 'error';
-        result.textContent = error instanceof Error
-          ? error.message
-          : 'No se pudo completar la importación.';
-        button.disabled = false;
-        button.textContent = 'Intentar nuevamente';
-      }
-    });
-  </script>
 </body>
 </html>

@@ -537,8 +537,11 @@ try {
         jsonResponse(['ok' => true, 'mode' => 'infinityfree-php']);
     }
 
-    if ($path === '/import' && $method === 'POST') {
+    if (in_array($path, ['/import', '/migrar-datos'], true) && $method === 'POST') {
         $provided = headerValue('X-Import-Secret');
+        if ($provided === '') {
+            $provided = trim((string)($_POST['import_secret'] ?? ''));
+        }
         if ($provided === '' || !hash_equals((string)config()['IMPORT_SECRET'], $provided)) {
             throw new HttpError('Clave de importación incorrecta.', 403);
         }
