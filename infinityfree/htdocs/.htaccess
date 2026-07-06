@@ -1,4 +1,5 @@
 Options -Indexes
+DirectoryIndex index.php index.html
 RewriteEngine On
 
 RewriteRule ^api(?:/.*)?$ api/index.php [QSA,L]
@@ -7,8 +8,8 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-RewriteRule ^admin(?:/.*)?$ index.html [L]
-RewriteRule ^$ index.html [L]
+RewriteRule ^admin(?:/.*)?$ index.php [L]
+RewriteRule ^$ index.php [L]
 
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
