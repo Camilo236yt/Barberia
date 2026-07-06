@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Portal de barberos · Capitan Gold</title>
-  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" href="capitan-gold-logo.png" type="image/png">
   <style>
     :root {
       color-scheme: dark;
@@ -121,10 +121,14 @@
       border-radius: 16px;
       padding: 14px;
       text-align: left;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
     }
     .choice:hover, .service:hover, .choice.active, .service.active {
       border-color: var(--gold);
       box-shadow: inset 0 0 0 1px rgba(212, 173, 79, .2);
+    }
+    .choice:active, .service:active, .primary:active {
+      transform: translateY(1px);
     }
     .choice small, .service small { display: block; color: var(--muted); margin-top: 4px; }
     .primary {
@@ -147,6 +151,7 @@
       color: var(--text);
       padding: 13px 14px;
       outline: none;
+      transition: border-color .18s ease, box-shadow .18s ease;
     }
     input:focus, select:focus { border-color: var(--gold); }
     .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
@@ -225,9 +230,77 @@
       .span-5 { grid-column: span 5; }
       .span-6 { grid-column: span 6; }
     }
-    @media (max-width: 620px) {
+    @media (max-width: 760px) {
+      .page { padding: 12px; }
       .hero { align-items: flex-start; flex-direction: column; }
+      .panel { padding: 16px; }
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
       .sale { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .choose-grid, .service-grid { grid-template-columns: 1fr; }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(0.97); opacity: 0.7; }
+      50% { transform: scale(1.03); opacity: 1; }
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 24px;
+      text-align: center;
+      background: rgba(27, 26, 24, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+    }
+    .loading-logo {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      border: 2px solid var(--gold);
+      margin-bottom: 24px;
+      object-fit: cover;
+      animation: pulse 2.5s infinite ease-in-out;
+      background: #000;
+    }
+    .loading-title {
+      font-family: Georgia, serif;
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .loading-text {
+      color: var(--gold-soft);
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+    }
+    .loading-text .dot-pulse {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 0 4px rgba(94, 224, 160, 0.2);
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+    .spinner {
+      border: 3px solid rgba(212, 173, 79, 0.1);
+      border-top: 3px solid var(--gold);
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 1s linear infinite;
+      margin-top: 16px;
     }
   </style>
 </head>
@@ -235,7 +308,7 @@
   <div class="page">
     <header class="hero">
       <div class="brand">
-        <img src="/capitan-gold-logo.png" alt="Capitan Gold">
+        <img src="capitan-gold-logo.png" alt="Capitan Gold">
         <div>
           <span class="eyebrow">Portal de barberos</span>
           <h1>Capitan Gold</h1>
@@ -319,7 +392,11 @@
       });
       const text = await response.text();
       const data = text ? JSON.parse(text) : {};
-      if (!response.ok) throw new Error(data.error || `Error ${response.status}`);
+      if (!response.ok) {
+        const err = new Error(data.error || `Error ${response.status}`);
+        err.status = response.status;
+        throw err;
+      }
       connection.textContent = 'Conectado';
       connection.classList.add('online');
       return data;
@@ -328,7 +405,17 @@
     function setMessage(message, type = '') {
       state.message = message;
       state.messageType = type;
-      render();
+      renderMessage();
+    }
+
+    function renderMessage() {
+      const root = app.querySelector('[data-message-root]');
+      if (!root) return;
+      if (!state.message) {
+        root.innerHTML = '';
+        return;
+      }
+      root.innerHTML = `<div class="message ${state.messageType === 'error' ? 'error' : state.messageType === 'ok' ? 'ok' : ''}">${escapeHtml(state.message)}</div>`;
     }
 
     function selectedBarberFromOptions() {
@@ -427,7 +514,7 @@
               ${branchBarbers.map((barber) => `
                 <button class="choice" type="button" data-pick-barber="${escapeHtml(barber.id)}">
                   <strong>${escapeHtml(barber.name)}</strong>
-                  <small>${escapeHtml(branch.name)} · ${Math.round(commissionRateFor(barber) * 100)}% comisión</small>
+                  <small>${escapeHtml(branch.name)}</small>
                 </button>
               `).join('') || '<div class="empty">No hay barberos activos en esta sede.</div>'}
             </div>
@@ -454,6 +541,41 @@
       return `<div class="message ${state.messageType === 'error' ? 'error' : state.messageType === 'ok' ? 'ok' : ''}">${escapeHtml(state.message)}</div>`;
     }
 
+    function updateLiveMetrics() {
+      const data = state.data;
+      const t = totals();
+      const tipContainer = document.getElementById('live-tip');
+      if (tipContainer) {
+        tipContainer.innerHTML = currentTip() > 0 ? `
+          <div class="message ok">
+            Precio base: ${money(selectedService()?.price || 0)} · Propina para ti: <strong>${money(currentTip())}</strong>
+          </div>
+        ` : '';
+      }
+      const summaryNodes = {
+        total: document.getElementById('summary-total'),
+        cash: document.getElementById('summary-cash'),
+        nequi: document.getElementById('summary-nequi'),
+        pending: document.getElementById('summary-pending'),
+        tips: document.getElementById('summary-tips'),
+        commission: document.getElementById('summary-commission'),
+        deductions: document.getElementById('summary-deductions'),
+        finalPay: document.getElementById('summary-final-pay'),
+      };
+      if (summaryNodes.total) summaryNodes.total.textContent = money(t.total);
+      if (summaryNodes.cash) summaryNodes.cash.textContent = money(t.cash);
+      if (summaryNodes.nequi) summaryNodes.nequi.textContent = money(t.nequi);
+      if (summaryNodes.pending) summaryNodes.pending.textContent = money(t.pendingNequi);
+      if (summaryNodes.tips) summaryNodes.tips.textContent = money(t.tips);
+      if (summaryNodes.commission) summaryNodes.commission.textContent = money(t.commission);
+      if (summaryNodes.deductions) summaryNodes.deductions.textContent = money(t.deductions);
+      if (summaryNodes.finalPay) summaryNodes.finalPay.textContent = money(t.finalPay);
+      const rateLabel = document.getElementById('rate-label');
+      if (rateLabel) rateLabel.textContent = `${Math.round(t.rate * 100)}% para ti`;
+      const summaryDate = document.getElementById('summary-date');
+      if (summaryDate) summaryDate.textContent = data?.date || '';
+    }
+
     function renderDashboard() {
       const data = state.data;
       const barber = data?.barber;
@@ -461,7 +583,7 @@
       const t = totals();
       subtitle.textContent = `${barber?.name || 'Barbero'} · ${branch?.name || 'Barbería'} · ${data?.date || ''}`;
       app.innerHTML = `
-        ${messageHtml()}
+        <div data-message-root>${messageHtml()}</div>
         <div class="grid">
           <section class="panel span-7">
             <div class="panel-head">
@@ -506,11 +628,11 @@
               </label>
             </div>
 
-            ${currentTip() > 0 ? `
+            <div id="live-tip">${currentTip() > 0 ? `
               <div class="message ok">
                 Precio base: ${money(selectedService()?.price || 0)} · Propina para ti: <strong>${money(currentTip())}</strong>
               </div>
-            ` : ''}
+            ` : ''}</div>
 
             <div class="segmented">
               <button type="button" class="${state.payment === 'cash' ? 'active' : ''}" data-payment="cash">Efectivo</button>
@@ -524,7 +646,8 @@
 
             <label class="field ${state.payment === 'nequi' ? '' : 'hidden'}">
               <span>Comprobante Nequi</span>
-              <input id="proofFile" type="file" accept="image/*" capture="environment">
+              <input id="proofFile" type="file" accept="image/*">
+              <small class="muted">Puedes seleccionar la foto desde la galería o tomarla con la cámara.</small>
             </label>
             ${state.proofImage ? '<div class="message ok">Comprobante cargado.</div>' : ''}
 
@@ -539,17 +662,17 @@
                 <p class="eyebrow">Tus cuentas de hoy</p>
                 <h2>${escapeHtml(data?.date || '')}</h2>
               </div>
-              <span class="status online">${Math.round(t.rate * 100)}% para ti</span>
+              <span class="status online" id="rate-label">${Math.round(t.rate * 100)}% para ti</span>
             </div>
             <div class="summary-grid">
-              <div class="summary-card"><span>Dinero recibido</span><strong>${money(t.total)}</strong></div>
-              <div class="summary-card"><span>Efectivo</span><strong>${money(t.cash)}</strong></div>
-              <div class="summary-card"><span>Nequi aprobado</span><strong>${money(t.nequi)}</strong></div>
-              <div class="summary-card"><span>Nequi pendiente</span><strong>${money(t.pendingNequi)}</strong></div>
-              <div class="summary-card"><span>Propinas</span><strong class="tip">${money(t.tips)}</strong></div>
-              <div class="summary-card"><span>Te corresponde</span><strong>${money(t.commission)}</strong></div>
-              <div class="summary-card"><span>Descuentos</span><strong>${money(t.deductions)}</strong></div>
-              <div class="summary-card"><span>Pago final</span><strong>${money(t.finalPay)}</strong></div>
+              <div class="summary-card"><span>Dinero recibido</span><strong id="summary-total">${money(t.total)}</strong></div>
+              <div class="summary-card"><span>Efectivo</span><strong id="summary-cash">${money(t.cash)}</strong></div>
+              <div class="summary-card"><span>Nequi aprobado</span><strong id="summary-nequi">${money(t.nequi)}</strong></div>
+              <div class="summary-card"><span>Nequi pendiente</span><strong id="summary-pending">${money(t.pendingNequi)}</strong></div>
+              <div class="summary-card"><span>Propinas</span><strong class="tip" id="summary-tips">${money(t.tips)}</strong></div>
+              <div class="summary-card"><span>Te corresponde</span><strong id="summary-commission">${money(t.commission)}</strong></div>
+              <div class="summary-card"><span>Descuentos</span><strong id="summary-deductions">${money(t.deductions)}</strong></div>
+              <div class="summary-card"><span>Pago final</span><strong id="summary-final-pay">${money(t.finalPay)}</strong></div>
             </div>
           </aside>
 
@@ -583,6 +706,8 @@
         </div>
       `;
       bindDashboard();
+      renderMessage();
+      updateLiveMetrics();
     }
 
     function saleHtml(sale) {
@@ -608,7 +733,7 @@
         state.selectedBarberId = '';
         state.data = null;
         subtitle.textContent = 'Selecciona tu nombre una vez y este dispositivo lo recordará.';
-        render();
+        loadOptions();
       });
       app.querySelectorAll('[data-service]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -636,7 +761,7 @@
       });
       document.getElementById('amount')?.addEventListener('input', (event) => {
         state.amount = Number(event.target.value || 0);
-        renderDashboard();
+        updateLiveMetrics();
       });
       document.getElementById('clientName')?.addEventListener('input', (event) => {
         state.clientName = event.target.value;
@@ -727,7 +852,12 @@
       state.selectedBarberId = barberId;
       localStorage.setItem(STORE_KEY, barberId);
       state.message = '';
-      await loadBootstrap();
+      try {
+        await loadBootstrap();
+      } catch (error) {
+        // Error message displayed by loadBootstrap
+      }
+      render();
     }
 
     async function loadOptions() {
@@ -773,12 +903,27 @@
           state.message = error.message || 'No se pudo cargar tu cuenta.';
           state.messageType = 'error';
         }
+        throw error;
       }
     }
 
     function render() {
-      if (state.loading && !state.options && !state.data) {
-        app.innerHTML = '<section class="panel"><div class="empty">Cargando portal…</div></section>';
+      if (state.loading) {
+        const barberName = state.selectedBarberId 
+          ? (state.data?.barber?.name || 'Cargando tus datos…') 
+          : 'Cargando sedes y barberos…';
+        
+        app.innerHTML = `
+          <div class="loading-container">
+            <img class="loading-logo" src="capitan-gold-logo.png" alt="Capitan Gold">
+            <h2 class="loading-title">Capitán Gold</h2>
+            <div class="loading-text">
+              <span class="dot-pulse"></span>
+              <span>${escapeHtml(barberName)}</span>
+            </div>
+            <div class="spinner"></div>
+          </div>
+        `;
         return;
       }
       if (!state.selectedBarberId || !state.data) {
@@ -788,7 +933,31 @@
       renderDashboard();
     }
 
-    loadOptions();
+    async function init() {
+      state.loading = true;
+      render();
+      if (state.selectedBarberId) {
+        try {
+          await loadBootstrap(false);
+        } catch (error) {
+          if (error.status === 404 || error.status === 403) {
+            state.selectedBarberId = '';
+            localStorage.removeItem(STORE_KEY);
+            state.data = null;
+            await loadOptions();
+          } else {
+            setMessage(error.message || 'No se pudo conectar con el servidor.', 'error');
+          }
+        } finally {
+          state.loading = false;
+          render();
+        }
+      } else {
+        await loadOptions();
+      }
+    }
+
+    init();
     window.setInterval(() => {
       if (state.selectedBarberId) loadBootstrap(true).then(render).catch(() => undefined);
     }, 15000);

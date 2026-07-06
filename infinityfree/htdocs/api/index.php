@@ -90,11 +90,17 @@ function pdo(): PDO
         'CREATE TABLE IF NOT EXISTS cg_devices (
             device_id VARCHAR(80) NOT NULL PRIMARY KEY,
             branch_id VARCHAR(64) NULL,
+            barber_id VARCHAR(64) NULL,
             role_name VARCHAR(20) NOT NULL DEFAULT "online",
             last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_cg_devices_seen (last_seen)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
+    try {
+        $pdo->exec('ALTER TABLE cg_devices ADD COLUMN barber_id VARCHAR(64) NULL AFTER branch_id');
+    } catch (PDOException $e) {
+        // Ignorar si la columna ya existe
+    }
     return $pdo;
 }
 

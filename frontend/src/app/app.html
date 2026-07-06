@@ -686,7 +686,10 @@
                   <span class="state-tag pending_review">Pendiente</span>
                 </div>
                 <div class="review-proof">
-                  <a *ngIf="sale.proof_url" [href]="sale.proof_url" target="_blank" rel="noopener"><img [src]="sale.proof_url" alt="Comprobante Nequi"></a>
+                  <div class="proof-visual" *ngIf="sale.proof_url">
+                    <a [href]="sale.proof_url" target="_blank" rel="noopener"><img [src]="sale.proof_url" alt="Comprobante Nequi"></a>
+                    <a [href]="sale.proof_url" target="_blank" rel="noopener" class="small-button" style="margin-top: 8px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; color: inherit; background: var(--line); padding: 4px 12px; border-radius: 99px; font-size: 0.75rem; font-weight: 600;">📷 Ver comprobante</a>
+                  </div>
                   <div>
                     <span class="sale-meta">Referencia: {{ sale.proof_note || 'Sin referencia' }}</span>
                     <div class="review-actions">
@@ -1261,10 +1264,11 @@
           <td data-label="Responsable">{{ saleResponsibleLabel(sale) }}</td>
           <td data-label="Servicio">{{ sale.service_name }}</td>
           <td data-label="Pago">
-            <a *ngIf="sale.proof_url" [href]="sale.proof_url" target="_blank" rel="noopener">
+            <span *ngIf="sale.proof_url" style="display: flex; gap: 8px; align-items: center;">
               <span class="payment-tag" [class.cash]="sale.payment_method === 'cash'" [class.nequi]="sale.payment_method === 'nequi'">{{ paymentLabel(sale.payment_method) }}</span>
-            </a>
-            <span *ngIf="!sale.proof_url" class="payment-tag cash">{{ paymentLabel(sale.payment_method) }}</span>
+              <a [href]="sale.proof_url" target="_blank" rel="noopener" class="small-button" style="display: inline-flex; align-items: center; gap: 4px; text-decoration: none; color: inherit; background: var(--line); padding: 4px 12px; border-radius: 99px; font-size: 0.75rem; font-weight: 600;">📷 Ver comprobante</a>
+            </span>
+            <span *ngIf="!sale.proof_url" class="payment-tag" [class.cash]="sale.payment_method === 'cash'" [class.nequi]="sale.payment_method === 'nequi'">{{ paymentLabel(sale.payment_method) }}</span>
           </td>
           <td data-label="Valor">
             {{ formatMoney(sale.amount) }}
