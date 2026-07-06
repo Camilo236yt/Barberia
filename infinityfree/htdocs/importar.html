@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Importar datos · Capitán Gold</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, system-ui, sans-serif;
+      background: #111;
+      color: #f5f5f5;
+    }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    main {
+      width: min(520px, 100%);
+      padding: 32px;
+      border: 1px solid #80611f;
+      border-radius: 18px;
+      background: #1c1c1c;
+      box-shadow: 0 20px 50px #0008;
+    }
+    h1 { margin-top: 0; font-family: Georgia, serif; }
+    p { color: #c7c7c7; line-height: 1.5; }
+    label { display: block; margin: 24px 0 8px; font-weight: 700; }
+    input, button {
+      width: 100%;
+      min-height: 48px;
+      border-radius: 10px;
+      box-sizing: border-box;
+      font: inherit;
+    }
+    input {
+      border: 1px solid #666;
+      padding: 0 14px;
+      background: #111;
+      color: white;
+    }
+    button {
+      margin-top: 14px;
+      border: 0;
+      background: #c6a04a;
+      color: #111;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button:disabled { cursor: wait; opacity: .65; }
+    #result {
+      display: none;
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+    }
+    #result.ok { display: block; background: #143c2b; color: #b8f3d5; }
+    #result.error { display: block; background: #4a2020; color: #ffc6c6; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Importar datos anteriores</h1>
+    <p>
+      Esta operación combina la información por identificador, por lo que no
+      duplica ventas, cierres ni gastos.
+    </p>
+    <label for="secret">Clave de importación</label>
+    <input id="secret" type="password" autocomplete="off">
+    <button id="importButton" type="button">Importar todos los datos</button>
+    <div id="result" role="status"></div>
+  </main>
+  <script>
+    const button = document.querySelector('#importButton');
+    const secret = document.querySelector('#secret');
+    const result = document.querySelector('#result');
+
+    button.addEventListener('click', async () => {
+      if (!secret.value.trim()) {
+        result.className = 'error';
+        result.textContent = 'Escribe la clave de importación.';
+        return;
+      }
+      if (!confirm('¿Importar ahora todos los datos anteriores?')) return;
+
+      button.disabled = true;
+      button.textContent = 'Importando…';
+      result.className = '';
+      result.textContent = '';
+
+      try {
+        const response = await fetch('/api/import', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Import-Secret': secret.value.trim()
+          },
+          body: '{}'
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || 'No se pudo completar la importación.');
+        }
+        result.className = 'ok';
+        result.textContent =
+          `Importación terminada correctamente.\n` +
+          `Ventas: ${payload.sales}\n` +
+          `Cierres: ${payload.closures}\n` +
+          `Gastos: ${payload.expenses}\n\n` +
+          `Ya puedes eliminar importar.html del servidor.`;
+        button.textContent = 'Importación terminada';
+        secret.value = '';
+      } catch (error) {
+        result.className = 'error';
+        result.textContent = error instanceof Error
+          ? error.message
+          : 'No se pudo completar la importación.';
+        button.disabled = false;
+        button.textContent = 'Intentar nuevamente';
+      }
+    });
+  </script>
+</body>
+</html>
