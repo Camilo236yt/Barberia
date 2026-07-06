@@ -1,0 +1,179 @@
+{
+    "version": 1,
+    "month": "2026-07",
+    "date": "2026-07-06",
+    "generated_at": "2026-07-06T00:51:42",
+    "branches": [
+        {
+            "id": "barberia-1",
+            "name": "Barbería de Arriba",
+            "active": true
+        },
+        {
+            "id": "barberia-2",
+            "name": "Barbería de Abajo",
+            "active": true
+        }
+    ],
+    "barbers": [
+        {
+            "id": "jose",
+            "name": "Jose",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5
+        },
+        {
+            "id": "luis",
+            "name": "Miguel Luís",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5
+        },
+        {
+            "id": "samuel",
+            "name": "Samuel",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5
+        },
+        {
+            "id": "omar",
+            "name": "Omar",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.59999999999999997779553950749686919152736663818359375
+        },
+        {
+            "id": "randy",
+            "name": "Randy",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.5
+        },
+        {
+            "id": "juan",
+            "name": "Juan",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.5
+        }
+    ],
+    "services": [
+        {
+            "id": "tijeras",
+            "name": "Corte con tijeras",
+            "price": 30000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "basico",
+            "name": "Corte básico",
+            "price": 25000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "barba",
+            "name": "Barba",
+            "price": 15000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "combo",
+            "name": "Corte y barba",
+            "price": 40000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "combo-tijeras",
+            "name": "Corte con tijeras y barba",
+            "price": 40000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "tijeras-b2",
+            "name": "Corte con tijeras",
+            "price": 30000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "basico-b2",
+            "name": "Corte básico",
+            "price": 25000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "barba-b2",
+            "name": "Barba",
+            "price": 15000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "combo-b2",
+            "name": "Corte y barba",
+            "price": 40000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "combo-tijeras-b2",
+            "name": "Corte con tijeras y barba",
+            "price": 40000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-99959520",
+            "name": "Corte",
+            "price": 25000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-2c2520d7",
+            "name": "Cortes 2",
+            "price": 50000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-7b443554",
+            "name": "Cortee",
+            "price": 23000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-82aaf0e2",
+            "name": "Dos cortes",
+            "price": 50000,
+            "branch_id": "barberia-2"
+        }
+    ],
+    "settings": {
+        "commission_rate": 0.5,
+        "currency": "COP",
+        "business_whatsapp_country_code": "57",
+        "catalog_version": 3
+    },
+    "sales": [
+        {
+            "id": "a9462041ac45",
+            "client_request_id": "venta-17954693-6f3b-4ac6-8900-a9377c7a94c4-99fb57d5-2a68-421f-8ab1-3271a544512a",
+            "created_at": "2026-07-06T00:51:00",
+            "branch_id": "barberia-1",
+            "branch_name": "Barbería de Arriba",
+            "sale_kind": "service",
+            "barber_id": "samuel",
+            "barber_name": "Samuel",
+            "service_id": "basico",
+            "service_name": "Corte básico",
+            "amount": 25000,
+            "base_amount": 25000,
+            "listed_price": 25000,
+            "tip_amount": 0,
+            "payment_method": "cash",
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed"
+        }
+    ],
+    "closures": [],
+    "expenses": []
+}
