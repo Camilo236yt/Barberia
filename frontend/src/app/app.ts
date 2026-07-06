@@ -231,6 +231,8 @@ export class App implements OnInit, OnDestroy {
   accessError = '';
   connectedAdminDevices = 0;
   maxAdminDevices = 10;
+  cloudHosted =
+    (window as Window & { CAPITAN_GOLD_CLOUD?: boolean }).CAPITAN_GOLD_CLOUD === true;
 
   selectedServiceId = '';
   saleKind: SaleKind = 'service';
@@ -337,6 +339,7 @@ export class App implements OnInit, OnDestroy {
   private backupStatusBusy = false;
   private localSessionTimer?: number;
   private offlineSyncTimer?: number;
+  private cloudRefreshTimer?: number;
   private localSessionId = '';
   private adminDeviceId = '';
   private eventSource?: EventSource;
@@ -354,6 +357,11 @@ export class App implements OnInit, OnDestroy {
     this.startLocalSession();
     this.loadAdminOptions();
     this.connectRealtime();
+    if (this.cloudHosted) {
+      this.cloudRefreshTimer = window.setInterval(() => {
+        if (this.activeBranchId && !this.dataLoading) void this.loadData(true);
+      }, 30000);
+    }
     this.refreshTimer = window.setInterval(() => {
       if (this.realtimeConnected) return;
       if (this.activeBranchId) this.loadData(true);
@@ -374,6 +382,7 @@ export class App implements OnInit, OnDestroy {
     if (this.realtimeRefreshTimer) window.clearTimeout(this.realtimeRefreshTimer);
     if (this.backupStatusTimer) window.clearInterval(this.backupStatusTimer);
     if (this.offlineSyncTimer) window.clearInterval(this.offlineSyncTimer);
+    if (this.cloudRefreshTimer) window.clearInterval(this.cloudRefreshTimer);
     this.closeLocalSession();
     window.removeEventListener('pagehide', this.localPageHideHandler);
     window.removeEventListener('pageshow', this.localPageShowHandler);
@@ -536,6 +545,7 @@ export class App implements OnInit, OnDestroy {
         if (latestClosure?.date) this.historyMonthKey = latestClosure.date.slice(0, 7);
       }
       this.isOnline = true;
+      if (this.cloudHosted) this.realtimeConnected = true;
       this.lastSyncAt = new Intl.DateTimeFormat('es-CO', {
         hour: '2-digit',
         minute: '2-digit',
@@ -544,6 +554,7 @@ export class App implements OnInit, OnDestroy {
       if (this.pendingOfflineSales.length) void this.flushOfflineSales();
     } catch (error) {
       this.isOnline = false;
+      if (this.cloudHosted) this.realtimeConnected = false;
       if (!silent) this.showSaleMessage(this.errorMessage(error), 'error');
     }
   }
@@ -1045,6 +1056,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   connectRealtime(): void {
+    if (this.cloudHosted) return;
     if (!('EventSource' in window)) return;
     const params = new URLSearchParams({ device_id: this.adminDeviceId });
     if (this.adminToken) params.set('token', this.adminToken);

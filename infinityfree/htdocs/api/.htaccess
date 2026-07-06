@@ -1,0 +1,5 @@
+Options -Indexes
+
+<FilesMatch "^(config\.php|config\.example\.php|migration-data.*\.json)$">
+  Require all denied
+</FilesMatch>
