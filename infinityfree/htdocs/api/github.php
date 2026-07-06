@@ -4,9 +4,9 @@ declare(strict_types=1);
 function githubSettings(): array
 {
     $cfg = config();
-    $repository = trim((string)($cfg['GITHUB_REPOSITORY'] ?? ''));
-    $token = trim((string)($cfg['GITHUB_TOKEN'] ?? ''));
-    $branch = trim((string)($cfg['GITHUB_HISTORY_BRANCH'] ?? 'historial-datos'));
+    $repository = trim((string)($cfg['Camilo236yt/Barberia'] ?? ''));
+    $token = trim((string)($cfg['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'] ?? ''));
+    $branch = trim((string)($cfg['historial-datos'] ?? 'historial-datos'));
     if (
         !preg_match('#^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$#', $repository) ||
         $token === '' ||
