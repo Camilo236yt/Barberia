@@ -372,10 +372,147 @@ function githubRemoteMonths(): array
         if (preg_match('#^cloud/dias/(\d{4}-\d{2})/\d{4}-\d{2}-\d{2}\.json$#', $path, $match)) {
             $months[$match[1]] = true;
         }
+        if (preg_match('#^meses/(\d{4}-\d{2})/\d{4}-\d{2}-\d{2}(?:-pc-[a-f0-9]{12})?\.zip$#', $path, $match)) {
+            $months[$match[1]] = true;
+        }
     }
     $result = array_keys($months);
     rsort($result);
     return $result;
+}
+
+function githubReadHistoryZip(string $zipBytes, string $expectedDate): array
+{
+    $entries = class_exists('ZipArchive')
+        ? githubReadHistoryZipWithExtension($zipBytes)
+        : githubReadHistoryZipWithoutExtension($zipBytes);
+
+    if (!isset($entries['history.json'])) {
+        throw new HttpError('Un respaldo antiguo no contiene history.json.', 502);
+    }
+    $decoded = json_decode((string)$entries['history.json'], true);
+    if (!is_array($decoded)) {
+        throw new HttpError('Un respaldo antiguo contiene history.json invalido.', 502);
+    }
+    if (($decoded['date'] ?? $expectedDate) !== $expectedDate) {
+        throw new HttpError('La fecha interna de un respaldo antiguo no coincide.', 502);
+    }
+    $proofs = [];
+    foreach ($entries as $name => $content) {
+        if (preg_match('#^uploads/([A-Za-z0-9._-]{1,180})$#', $name, $match)) {
+            $proofs[$match[1]] = $content;
+        }
+    }
+    return ['state' => $decoded, 'proofs' => $proofs];
+}
+
+function githubReadHistoryZipWithExtension(string $zipBytes): array
+{
+    $temporary = tempnam(sys_get_temp_dir(), 'cg-history-');
+    if ($temporary === false) {
+        throw new HttpError('No se pudo preparar un respaldo temporal.', 500);
+    }
+    try {
+        if (file_put_contents($temporary, $zipBytes, LOCK_EX) === false) {
+            throw new HttpError('No se pudo verificar un respaldo descargado.', 500);
+        }
+        $archive = new ZipArchive();
+        if ($archive->open($temporary) !== true) {
+            throw new HttpError('GitHub devolvio un ZIP de historial danado.', 502);
+        }
+        try {
+            $entries = [];
+            for ($index = 0; $index < $archive->numFiles; $index++) {
+                $name = (string)$archive->getNameIndex($index);
+                if ($name === '' || str_ends_with($name, '/')) {
+                    continue;
+                }
+                $content = $archive->getFromIndex($index);
+                if ($content !== false) {
+                    $entries[$name] = $content;
+                }
+            }
+            return $entries;
+        } finally {
+            $archive->close();
+        }
+    } finally {
+        @unlink($temporary);
+    }
+}
+
+function githubReadHistoryZipWithoutExtension(string $zipBytes): array
+{
+    $length = strlen($zipBytes);
+    $searchStart = max(0, $length - 66000);
+    $eocdPosition = strrpos(substr($zipBytes, $searchStart), "\x50\x4b\x05\x06");
+    if ($eocdPosition === false) {
+        throw new HttpError('GitHub devolvio un ZIP sin directorio central.', 502);
+    }
+    $eocdPosition += $searchStart;
+    $eocd = substr($zipBytes, $eocdPosition, 22);
+    if (strlen($eocd) < 22) {
+        throw new HttpError('GitHub devolvio un ZIP incompleto.', 502);
+    }
+    $header = unpack(
+        'vdisk/vcd_disk/ventries_disk/ventries/Vcd_size/Vcd_offset/vcomment_length',
+        substr($eocd, 4)
+    );
+    if (!is_array($header)) {
+        throw new HttpError('No se pudo leer el indice del ZIP antiguo.', 502);
+    }
+    $entries = [];
+    $offset = (int)$header['cd_offset'];
+    $entryCount = (int)$header['entries'];
+    for ($entryIndex = 0; $entryIndex < $entryCount; $entryIndex++) {
+        if (substr($zipBytes, $offset, 4) !== "\x50\x4b\x01\x02") {
+            throw new HttpError('El indice del ZIP antiguo esta danado.', 502);
+        }
+        $central = substr($zipBytes, $offset + 4, 42);
+        $data = unpack(
+            'vversion_made/vversion_needed/vflags/vmethod/vmtime/vmdate/Vcrc/Vcompressed_size/Vuncompressed_size/vname_length/vextra_length/vcomment_length/vdisk/vinternal/Vexternal/Vlocal_offset',
+            $central
+        );
+        if (!is_array($data)) {
+            throw new HttpError('No se pudo leer una entrada del ZIP antiguo.', 502);
+        }
+        $nameLength = (int)$data['name_length'];
+        $extraLength = (int)$data['extra_length'];
+        $commentLength = (int)$data['comment_length'];
+        $name = substr($zipBytes, $offset + 46, $nameLength);
+        $offset += 46 + $nameLength + $extraLength + $commentLength;
+        if ($name === '' || str_ends_with($name, '/')) {
+            continue;
+        }
+        if (strlen($name) > 220 || str_contains($name, '..') || str_starts_with($name, '/')) {
+            continue;
+        }
+        $localOffset = (int)$data['local_offset'];
+        if (substr($zipBytes, $localOffset, 4) !== "\x50\x4b\x03\x04") {
+            throw new HttpError('Una entrada del ZIP antiguo apunta a datos invalidos.', 502);
+        }
+        $local = unpack(
+            'vversion/vflags/vmethod/vmtime/vmdate/Vcrc/Vcompressed_size/Vuncompressed_size/vname_length/vextra_length',
+            substr($zipBytes, $localOffset + 4, 26)
+        );
+        if (!is_array($local)) {
+            throw new HttpError('No se pudo leer una cabecera local del ZIP antiguo.', 502);
+        }
+        $dataOffset = $localOffset + 30 + (int)$local['name_length'] + (int)$local['extra_length'];
+        $compressed = substr($zipBytes, $dataOffset, (int)$data['compressed_size']);
+        if ((int)$data['method'] === 0) {
+            $content = $compressed;
+        } elseif ((int)$data['method'] === 8) {
+            $content = @gzinflate($compressed);
+            if ($content === false) {
+                throw new HttpError('No se pudo descomprimir una entrada del ZIP antiguo.', 502);
+            }
+        } else {
+            continue;
+        }
+        $entries[$name] = $content;
+    }
+    return $entries;
 }
 
 function githubDownloadMonth(string $month): array
@@ -385,13 +522,18 @@ function githubDownloadMonth(string $month): array
     }
     $snapshot = githubSnapshot();
     $dayEntries = [];
+    $zipEntries = [];
     foreach ($snapshot['entries'] as $path => $sha) {
         if (preg_match('#^cloud/dias/' . preg_quote($month, '#') . '/\d{4}-\d{2}-\d{2}\.json$#', $path)) {
             $dayEntries[$path] = $sha;
         }
+        if (preg_match('#^meses/' . preg_quote($month, '#') . '/(\d{4}-\d{2}-\d{2})(?:-pc-[a-f0-9]{12})?\.zip$#', $path, $match)) {
+            $zipEntries[$path] = ['sha' => $sha, 'date' => $match[1]];
+        }
     }
     ksort($dayEntries);
-    if (count($dayEntries) === 0) {
+    ksort($zipEntries);
+    if (count($dayEntries) === 0 && count($zipEntries) === 0) {
         throw new HttpError("No hay respaldos cloud de $month en GitHub.", 404);
     }
 
@@ -417,6 +559,21 @@ function githubDownloadMonth(string $month): array
             is_array($decoded['settings'] ?? null) ? $decoded['settings'] : []
         );
     }
+    $zipProofs = [];
+    foreach ($zipEntries as $entry) {
+        $decodedZip = githubReadHistoryZip(githubBlobContent((string)$entry['sha']), (string)$entry['date']);
+        $decoded = $decodedZip['state'];
+        foreach (['branches', 'barbers', 'services', 'sales', 'closures', 'expenses'] as $key) {
+            $incoming[$key] = mergeById($incoming[$key], $decoded[$key] ?? []);
+        }
+        $incoming['settings'] = array_merge(
+            $incoming['settings'],
+            is_array($decoded['settings'] ?? null) ? $decoded['settings'] : []
+        );
+        foreach ($decodedZip['proofs'] as $filename => $content) {
+            $zipProofs[$filename] = $content;
+        }
+    }
 
     $proofs = [];
     foreach ($incoming['sales'] as $sale) {
@@ -431,9 +588,12 @@ function githubDownloadMonth(string $month): array
             $proofs[$filename] = githubBlobContent($snapshot['entries'][$path]);
         }
     }
+    foreach ($zipProofs as $filename => $content) {
+        $proofs[$filename] = $content;
+    }
     return [
         'state' => $incoming,
         'proofs' => $proofs,
-        'files' => count($dayEntries),
+        'files' => count($dayEntries) + count($zipEntries),
     ];
 }

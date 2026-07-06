@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portal de barberos · Capitan Gold</title>
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d0d0d;
+      --panel: #1b1a18;
+      --panel-soft: #24221f;
+      --gold: #d4ad4f;
+      --gold-soft: #f0d27a;
+      --text: #f7f3ea;
+      --muted: #b9b2a6;
+      --line: rgba(212, 173, 79, .35);
+      --danger: #ff7676;
+      --ok: #5ee0a0;
+      --nequi: #b678ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(212, 173, 79, .12), transparent 34rem),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .page {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: 18px;
+    }
+    .hero, .panel {
+      border: 1px solid var(--line);
+      background: rgba(27, 26, 24, .94);
+      border-radius: 24px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .34);
+    }
+    .hero {
+      padding: 24px;
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand img {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      border: 1px solid var(--gold);
+      background: #000;
+      object-fit: cover;
+    }
+    .eyebrow {
+      color: var(--gold-soft);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      font-weight: 800;
+      font-size: .72rem;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2rem, 7vw, 3.3rem); }
+    h2 { font-family: Georgia, "Times New Roman", serif; font-size: 1.55rem; }
+    h3 { font-size: 1rem; }
+    .muted { color: var(--muted); }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .06);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .status::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(255, 118, 118, .1);
+    }
+    .status.online::before { background: var(--ok); box-shadow: 0 0 0 4px rgba(94, 224, 160, .12); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .panel {
+      padding: 18px;
+      grid-column: span 12;
+    }
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .choose-grid, .service-grid, .summary-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .choose-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    .service-grid { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+    .summary-grid { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+    .choice, .service, .ghost, .primary {
+      border: 1px solid rgba(255, 255, 255, .12);
+      background: var(--panel-soft);
+      color: var(--text);
+      border-radius: 16px;
+      padding: 14px;
+      text-align: left;
+    }
+    .choice:hover, .service:hover, .choice.active, .service.active {
+      border-color: var(--gold);
+      box-shadow: inset 0 0 0 1px rgba(212, 173, 79, .2);
+    }
+    .choice small, .service small { display: block; color: var(--muted); margin-top: 4px; }
+    .primary {
+      width: 100%;
+      border-color: var(--gold);
+      background: linear-gradient(135deg, var(--gold), var(--gold-soft));
+      color: #111;
+      text-align: center;
+      font-weight: 900;
+    }
+    .primary:disabled { opacity: .55; cursor: wait; }
+    .ghost { text-align: center; background: transparent; }
+    .field { display: grid; gap: 7px; margin-bottom: 12px; }
+    .field span { font-weight: 800; color: var(--muted); }
+    input, select {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 14px;
+      background: #111;
+      color: var(--text);
+      padding: 13px 14px;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--gold); }
+    .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: #111;
+      margin-bottom: 12px;
+    }
+    .segmented button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 900;
+    }
+    .segmented button.active { background: var(--text); color: #111; }
+    .summary-card {
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 16px;
+      padding: 14px;
+      background: rgba(255,255,255,.045);
+    }
+    .summary-card span { display: block; color: var(--muted); font-size: .85rem; }
+    .summary-card strong { display: block; margin-top: 6px; font-size: 1.2rem; }
+    .tip { color: var(--gold-soft); }
+    .list { display: grid; gap: 10px; }
+    .sale {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 16px;
+      padding: 13px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      background: rgba(0,0,0,.16);
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 9px;
+      margin: 5px 5px 0 0;
+      background: rgba(255,255,255,.08);
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 800;
+    }
+    .tag.cash { color: var(--ok); }
+    .tag.nequi { color: var(--nequi); }
+    .tag.pending { color: var(--gold-soft); }
+    .message {
+      border-radius: 16px;
+      padding: 13px 14px;
+      margin: 12px 0;
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+    }
+    .message.error { background: rgba(255, 118, 118, .16); color: #ffd2d2; }
+    .message.ok { background: rgba(94, 224, 160, .12); color: #c9ffe3; }
+    .empty {
+      padding: 24px;
+      border: 1px dashed rgba(255,255,255,.18);
+      border-radius: 16px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .hidden { display: none !important; }
+    @media (min-width: 850px) {
+      .span-7 { grid-column: span 7; }
+      .span-5 { grid-column: span 5; }
+      .span-6 { grid-column: span 6; }
+    }
+    @media (max-width: 620px) {
+      .hero { align-items: flex-start; flex-direction: column; }
+      .sale { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="brand">
+        <img src="/capitan-gold-logo.png" alt="Capitan Gold">
+        <div>
+          <span class="eyebrow">Portal de barberos</span>
+          <h1>Capitan Gold</h1>
+          <p class="muted" id="subtitle">Selecciona tu nombre una vez y este dispositivo lo recordará.</p>
+        </div>
+      </div>
+      <span class="status" id="connection">Conectando…</span>
+    </header>
+
+    <main id="app"></main>
+  </div>
+
+  <script>
+    const API = '/api/barber-portal';
+    const STORE_KEY = 'capitan-gold-barber-portal-v1';
+    const DEVICE_KEY = 'capitan-gold-barber-device-id';
+    const state = {
+      loading: true,
+      saving: false,
+      message: '',
+      messageType: '',
+      options: null,
+      selectedBarberId: localStorage.getItem(STORE_KEY) || '',
+      data: null,
+      selectedServiceId: '',
+      special: false,
+      specialName: '',
+      amount: 0,
+      payment: 'cash',
+      clientName: '',
+      proofNote: '',
+      proofImage: '',
+    };
+
+    const app = document.getElementById('app');
+    const connection = document.getElementById('connection');
+    const subtitle = document.getElementById('subtitle');
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      })[char]);
+    }
+
+    function money(value) {
+      return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0,
+      }).format(Number(value || 0));
+    }
+
+    function timeOnly(value) {
+      const match = String(value || '').match(/T(\d{2}):(\d{2})/);
+      if (!match) return '--:--';
+      const hour = Number(match[1]);
+      return `${hour % 12 || 12}:${match[2]} ${hour >= 12 ? 'p. m.' : 'a. m.'}`;
+    }
+
+    function deviceId() {
+      let id = localStorage.getItem(DEVICE_KEY);
+      if (!id) {
+        id = (crypto.randomUUID && crypto.randomUUID()) ||
+          `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        localStorage.setItem(DEVICE_KEY, id);
+      }
+      return id;
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(`${API}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+        },
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!response.ok) throw new Error(data.error || `Error ${response.status}`);
+      connection.textContent = 'Conectado';
+      connection.classList.add('online');
+      return data;
+    }
+
+    function setMessage(message, type = '') {
+      state.message = message;
+      state.messageType = type;
+      render();
+    }
+
+    function selectedBarberFromOptions() {
+      return state.options?.barbers?.find((barber) => barber.id === state.selectedBarberId);
+    }
+
+    function services() {
+      return state.data?.services || [];
+    }
+
+    function sales() {
+      return state.data?.sales || [];
+    }
+
+    function confirmedSales() {
+      return sales().filter((sale) => sale.status === 'confirmed');
+    }
+
+    function saleTip(sale) {
+      const amount = Number(sale.amount || 0);
+      const tip = Number(sale.tip_amount || 0);
+      return tip >= 0 && tip <= amount ? tip : 0;
+    }
+
+    function saleBase(sale) {
+      return Number(sale.amount || 0) - saleTip(sale);
+    }
+
+    function commissionRate() {
+      const barber = state.data?.barber || selectedBarberFromOptions();
+      const stored = Number(barber?.commission_rate);
+      if (stored > 0 && stored <= 1) return stored;
+      return barber?.id === 'omar' || String(barber?.name || '').trim().toLowerCase() === 'omar'
+        ? 0.6
+        : Number(state.data?.settings?.commission_rate || state.options?.settings?.commission_rate || 0.5);
+    }
+
+    function totals() {
+      const confirmed = confirmedSales();
+      const total = confirmed.reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
+      const cash = confirmed
+        .filter((sale) => sale.payment_method === 'cash')
+        .reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
+      const nequi = confirmed
+        .filter((sale) => sale.payment_method === 'nequi')
+        .reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
+      const pendingNequi = sales()
+        .filter((sale) => sale.status === 'pending_review')
+        .reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
+      const tips = confirmed.reduce((sum, sale) => sum + saleTip(sale), 0);
+      const base = confirmed.reduce((sum, sale) => sum + saleBase(sale), 0);
+      const rate = commissionRate();
+      const commission = Math.round(base * rate) + tips;
+      const deductions = (state.data?.expenses || [])
+        .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+      return {
+        total,
+        cash,
+        nequi,
+        pendingNequi,
+        tips,
+        base,
+        commission,
+        deductions,
+        finalPay: commission - deductions,
+        shopShare: base - Math.round(base * rate),
+        rate,
+      };
+    }
+
+    function selectedService() {
+      return services().find((service) => service.id === state.selectedServiceId);
+    }
+
+    function currentTip() {
+      if (state.special) return 0;
+      const service = selectedService();
+      return Math.max(0, Number(state.amount || 0) - Number(service?.price || 0));
+    }
+
+    function renderPicker() {
+      const branches = state.options?.branches || [];
+      const barbers = state.options?.barbers || [];
+      const branchCards = branches.map((branch) => {
+        const branchBarbers = barbers.filter((barber) => barber.branch_id === branch.id);
+        return `
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">${escapeHtml(branch.name)}</p>
+                <h2>Selecciona tu nombre</h2>
+              </div>
+              <span class="status online">${branchBarbers.length} barberos</span>
+            </div>
+            <div class="choose-grid">
+              ${branchBarbers.map((barber) => `
+                <button class="choice" type="button" data-pick-barber="${escapeHtml(barber.id)}">
+                  <strong>${escapeHtml(barber.name)}</strong>
+                  <small>${escapeHtml(branch.name)} · ${Math.round(commissionRateFor(barber) * 100)}% comisión</small>
+                </button>
+              `).join('') || '<div class="empty">No hay barberos activos en esta sede.</div>'}
+            </div>
+          </section>
+        `;
+      }).join('');
+      app.innerHTML = `
+        ${messageHtml()}
+        <div class="grid">${branchCards}</div>
+      `;
+      app.querySelectorAll('[data-pick-barber]').forEach((button) => {
+        button.addEventListener('click', () => selectBarber(button.dataset.pickBarber));
+      });
+    }
+
+    function commissionRateFor(barber) {
+      const stored = Number(barber?.commission_rate);
+      if (stored > 0 && stored <= 1) return stored;
+      return barber?.id === 'omar' || String(barber?.name || '').trim().toLowerCase() === 'omar' ? 0.6 : 0.5;
+    }
+
+    function messageHtml() {
+      if (!state.message) return '';
+      return `<div class="message ${state.messageType === 'error' ? 'error' : state.messageType === 'ok' ? 'ok' : ''}">${escapeHtml(state.message)}</div>`;
+    }
+
+    function renderDashboard() {
+      const data = state.data;
+      const barber = data?.barber;
+      const branch = data?.branch;
+      const t = totals();
+      subtitle.textContent = `${barber?.name || 'Barbero'} · ${branch?.name || 'Barbería'} · ${data?.date || ''}`;
+      app.innerHTML = `
+        ${messageHtml()}
+        <div class="grid">
+          <section class="panel span-7">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">${escapeHtml(branch?.name || '')}</p>
+                <h2>Registrar corte de ${escapeHtml(barber?.name || '')}</h2>
+                <p class="muted">Tu nombre queda guardado en este dispositivo.</p>
+              </div>
+              <button class="ghost" type="button" id="changeBarber">Cambiar nombre</button>
+            </div>
+
+            ${data?.closed ? '<div class="message error">La caja de hoy está cerrada. Pide al administrador reabrirla si falta un corte.</div>' : ''}
+
+            <div class="service-grid">
+              ${services().map((service) => `
+                <button class="service ${state.selectedServiceId === service.id && !state.special ? 'active' : ''}" type="button" data-service="${escapeHtml(service.id)}">
+                  <strong>${escapeHtml(service.name)}</strong>
+                  <small>${money(service.price)}</small>
+                </button>
+              `).join('')}
+              <button class="service ${state.special ? 'active' : ''}" type="button" id="specialService">
+                <strong>Servicio especial</strong>
+                <small>Nombre y precio libre</small>
+              </button>
+            </div>
+
+            <div class="${state.special ? '' : 'hidden'}">
+              <label class="field">
+                <span>Nombre del servicio especial</span>
+                <input id="specialName" maxlength="60" value="${escapeHtml(state.specialName)}" placeholder="Ej. Corte especial">
+              </label>
+            </div>
+
+            <div class="two">
+              <label class="field">
+                <span>Valor cobrado</span>
+                <input id="amount" type="number" min="1" step="1000" value="${Number(state.amount || 0)}">
+              </label>
+              <label class="field">
+                <span>Cliente (opcional)</span>
+                <input id="clientName" maxlength="80" value="${escapeHtml(state.clientName)}">
+              </label>
+            </div>
+
+            ${currentTip() > 0 ? `
+              <div class="message ok">
+                Precio base: ${money(selectedService()?.price || 0)} · Propina para ti: <strong>${money(currentTip())}</strong>
+              </div>
+            ` : ''}
+
+            <div class="segmented">
+              <button type="button" class="${state.payment === 'cash' ? 'active' : ''}" data-payment="cash">Efectivo</button>
+              <button type="button" class="${state.payment === 'nequi' ? 'active' : ''}" data-payment="nequi">Nequi</button>
+            </div>
+
+            <label class="field">
+              <span>Referencia o nota (opcional)</span>
+              <input id="proofNote" maxlength="120" value="${escapeHtml(state.proofNote)}" placeholder="Número, detalle o nota">
+            </label>
+
+            <label class="field ${state.payment === 'nequi' ? '' : 'hidden'}">
+              <span>Comprobante Nequi</span>
+              <input id="proofFile" type="file" accept="image/*" capture="environment">
+            </label>
+            ${state.proofImage ? '<div class="message ok">Comprobante cargado.</div>' : ''}
+
+            <button class="primary" id="submitSale" type="button" ${state.saving || data?.closed ? 'disabled' : ''}>
+              ${state.saving ? 'Guardando…' : 'Guardar mi corte'}
+            </button>
+          </section>
+
+          <aside class="panel span-5">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Tus cuentas de hoy</p>
+                <h2>${escapeHtml(data?.date || '')}</h2>
+              </div>
+              <span class="status online">${Math.round(t.rate * 100)}% para ti</span>
+            </div>
+            <div class="summary-grid">
+              <div class="summary-card"><span>Dinero recibido</span><strong>${money(t.total)}</strong></div>
+              <div class="summary-card"><span>Efectivo</span><strong>${money(t.cash)}</strong></div>
+              <div class="summary-card"><span>Nequi aprobado</span><strong>${money(t.nequi)}</strong></div>
+              <div class="summary-card"><span>Nequi pendiente</span><strong>${money(t.pendingNequi)}</strong></div>
+              <div class="summary-card"><span>Propinas</span><strong class="tip">${money(t.tips)}</strong></div>
+              <div class="summary-card"><span>Te corresponde</span><strong>${money(t.commission)}</strong></div>
+              <div class="summary-card"><span>Descuentos</span><strong>${money(t.deductions)}</strong></div>
+              <div class="summary-card"><span>Pago final</span><strong>${money(t.finalPay)}</strong></div>
+            </div>
+          </aside>
+
+          <section class="panel span-6">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Historial de hoy</p>
+                <h2>Tus cortes</h2>
+              </div>
+              <span class="status online">${sales().length} registros</span>
+            </div>
+            <div class="list">
+              ${sales().length ? sales().map((sale) => saleHtml(sale)).join('') : '<div class="empty">Aún no tienes cortes registrados hoy.</div>'}
+            </div>
+          </section>
+
+          <section class="panel span-6">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Explicación</p>
+                <h2>Matemática</h2>
+              </div>
+            </div>
+            <div class="list">
+              <div class="summary-card"><span>Base de servicios</span><strong>${money(t.base)}</strong></div>
+              <div class="summary-card"><span>Porcentaje sobre base</span><strong>${Math.round(t.rate * 100)}%</strong></div>
+              <div class="summary-card"><span>Propina completa para ti</span><strong>${money(t.tips)}</strong></div>
+              <div class="summary-card"><span>Parte de la barbería sobre base</span><strong>${money(t.shopShare)}</strong></div>
+            </div>
+          </section>
+        </div>
+      `;
+      bindDashboard();
+    }
+
+    function saleHtml(sale) {
+      return `
+        <article class="sale">
+          <div>
+            <strong>${escapeHtml(sale.service_name)}</strong>
+            <div>
+              <span class="tag ${sale.payment_method === 'nequi' ? 'nequi' : 'cash'}">${sale.payment_method === 'nequi' ? 'Nequi' : 'Efectivo'}</span>
+              <span class="tag ${sale.status === 'pending_review' ? 'pending' : ''}">${sale.status === 'pending_review' ? 'Pendiente' : 'Confirmado'}</span>
+              ${saleTip(sale) > 0 ? `<span class="tag">Propina ${money(saleTip(sale))}</span>` : ''}
+              <span class="tag">${timeOnly(sale.created_at)}</span>
+            </div>
+          </div>
+          <strong>${money(sale.amount)}</strong>
+        </article>
+      `;
+    }
+
+    function bindDashboard() {
+      document.getElementById('changeBarber')?.addEventListener('click', () => {
+        localStorage.removeItem(STORE_KEY);
+        state.selectedBarberId = '';
+        state.data = null;
+        subtitle.textContent = 'Selecciona tu nombre una vez y este dispositivo lo recordará.';
+        render();
+      });
+      app.querySelectorAll('[data-service]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const service = services().find((item) => item.id === button.dataset.service);
+          state.special = false;
+          state.selectedServiceId = service?.id || '';
+          state.amount = Number(service?.price || 0);
+          state.message = '';
+          render();
+        });
+      });
+      document.getElementById('specialService')?.addEventListener('click', () => {
+        state.special = true;
+        state.selectedServiceId = '';
+        state.amount = 0;
+        state.message = '';
+        render();
+      });
+      app.querySelectorAll('[data-payment]').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.payment = button.dataset.payment || 'cash';
+          state.message = '';
+          render();
+        });
+      });
+      document.getElementById('amount')?.addEventListener('input', (event) => {
+        state.amount = Number(event.target.value || 0);
+        renderDashboard();
+      });
+      document.getElementById('clientName')?.addEventListener('input', (event) => {
+        state.clientName = event.target.value;
+      });
+      document.getElementById('proofNote')?.addEventListener('input', (event) => {
+        state.proofNote = event.target.value;
+      });
+      document.getElementById('specialName')?.addEventListener('input', (event) => {
+        state.specialName = event.target.value;
+      });
+      document.getElementById('proofFile')?.addEventListener('change', readProof);
+      document.getElementById('submitSale')?.addEventListener('click', submitSale);
+    }
+
+    function readProof(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        setMessage('Selecciona una imagen válida.', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.proofImage = String(reader.result || '');
+        setMessage('Comprobante cargado.', 'ok');
+      };
+      reader.onerror = () => setMessage('No se pudo leer el comprobante.', 'error');
+      reader.readAsDataURL(file);
+    }
+
+    async function submitSale() {
+      if (!state.selectedBarberId) return;
+      if (state.special && state.specialName.trim().length < 2) {
+        setMessage('Escribe el nombre del servicio especial.', 'error');
+        return;
+      }
+      if (!state.special && !state.selectedServiceId) {
+        setMessage('Selecciona el servicio realizado.', 'error');
+        return;
+      }
+      if (Number(state.amount || 0) <= 0) {
+        setMessage('El valor cobrado debe ser mayor a cero.', 'error');
+        return;
+      }
+      if (state.payment === 'nequi' && !state.proofImage) {
+        setMessage('Sube el comprobante de Nequi.', 'error');
+        return;
+      }
+      state.saving = true;
+      render();
+      try {
+        await api('/sales', {
+          method: 'POST',
+          body: JSON.stringify({
+            client_request_id: `${deviceId()}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            barber_id: state.selectedBarberId,
+            service_id: state.special ? '' : state.selectedServiceId,
+            custom_service_name: state.special ? state.specialName.trim() : '',
+            amount: Number(state.amount || 0),
+            payment_method: state.payment,
+            proof_image: state.payment === 'nequi' ? state.proofImage : '',
+            proof_note: state.proofNote,
+            client_name: state.clientName,
+          }),
+        });
+        state.clientName = '';
+        state.proofNote = '';
+        state.proofImage = '';
+        if (state.special) {
+          state.specialName = '';
+          state.amount = 0;
+        } else {
+          const service = selectedService();
+          state.amount = Number(service?.price || 0);
+        }
+        state.message = 'Corte guardado correctamente.';
+        state.messageType = 'ok';
+        await loadBootstrap(true);
+      } catch (error) {
+        setMessage(error.message || 'No se pudo guardar el corte.', 'error');
+      } finally {
+        state.saving = false;
+        render();
+      }
+    }
+
+    async function selectBarber(barberId) {
+      state.selectedBarberId = barberId;
+      localStorage.setItem(STORE_KEY, barberId);
+      state.message = '';
+      await loadBootstrap();
+    }
+
+    async function loadOptions() {
+      state.loading = true;
+      render();
+      try {
+        state.options = await api('/options');
+        const saved = selectedBarberFromOptions();
+        if (saved) {
+          await loadBootstrap(true);
+        } else {
+          state.selectedBarberId = '';
+          localStorage.removeItem(STORE_KEY);
+        }
+      } catch (error) {
+        connection.textContent = 'Sin conexión';
+        connection.classList.remove('online');
+        state.message = error.message || 'No se pudo cargar el portal.';
+        state.messageType = 'error';
+      } finally {
+        state.loading = false;
+        render();
+      }
+    }
+
+    async function loadBootstrap(silent = false) {
+      if (!state.selectedBarberId) return;
+      try {
+        state.data = await api(`/bootstrap?barber_id=${encodeURIComponent(state.selectedBarberId)}`);
+        if (!state.selectedServiceId && !state.special) {
+          const first = services()[0];
+          state.selectedServiceId = first?.id || '';
+          state.amount = Number(first?.price || 0);
+        }
+        if (!silent) {
+          state.message = '';
+          state.messageType = '';
+        }
+      } catch (error) {
+        connection.textContent = 'Reconectando…';
+        connection.classList.remove('online');
+        if (!silent) {
+          state.message = error.message || 'No se pudo cargar tu cuenta.';
+          state.messageType = 'error';
+        }
+      }
+    }
+
+    function render() {
+      if (state.loading && !state.options && !state.data) {
+        app.innerHTML = '<section class="panel"><div class="empty">Cargando portal…</div></section>';
+        return;
+      }
+      if (!state.selectedBarberId || !state.data) {
+        renderPicker();
+        return;
+      }
+      renderDashboard();
+    }
+
+    loadOptions();
+    window.setInterval(() => {
+      if (state.selectedBarberId) loadBootstrap(true).then(render).catch(() => undefined);
+    }, 15000);
+  </script>
+</body>
+</html>
