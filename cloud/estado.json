@@ -143,27 +143,6 @@
     ],
     "sales": [
         {
-            "id": "a9462041ac45",
-            "client_request_id": "venta-17954693-6f3b-4ac6-8900-a9377c7a94c4-99fb57d5-2a68-421f-8ab1-3271a544512a",
-            "created_at": "2026-07-06T00:51:00",
-            "branch_id": "barberia-1",
-            "branch_name": "Barbería de Arriba",
-            "sale_kind": "service",
-            "barber_id": "samuel",
-            "barber_name": "Samuel",
-            "service_id": "basico",
-            "service_name": "Corte básico",
-            "amount": 25000,
-            "base_amount": 25000,
-            "listed_price": 25000,
-            "tip_amount": 0,
-            "payment_method": "cash",
-            "proof_url": null,
-            "proof_note": "",
-            "client_name": "",
-            "status": "confirmed"
-        },
-        {
             "id": "8aa3e61627e2",
             "created_at": "2026-07-02T13:37:00",
             "branch_id": "barberia-2",
@@ -2837,15 +2816,15 @@
             "branch_id": "barberia-1",
             "branch_name": "Barbería de Arriba",
             "closed_at": "2026-07-06T00:52:55",
-            "status": "closed",
+            "status": "reopened",
             "counted_cash": 0,
-            "expected_cash": 25000,
-            "cash_difference": -25000,
-            "total_confirmed": 25000,
-            "cash_total": 25000,
+            "expected_cash": 0,
+            "cash_difference": 0,
+            "total_confirmed": 0,
+            "cash_total": 0,
             "nequi_confirmed": 0,
             "nequi_pending": 0,
-            "sales_count": 1,
+            "sales_count": 0,
             "pending_nequi_count": 0,
             "commission_rate": 0.5,
             "barbers": [
@@ -2886,19 +2865,19 @@
                 {
                     "barber_id": "samuel",
                     "barber_name": "Samuel",
-                    "sales_count": 1,
-                    "total": 25000,
-                    "base_total": 25000,
+                    "sales_count": 0,
+                    "total": 0,
+                    "base_total": 0,
                     "tip_total": 0,
                     "nequi_total": 0,
-                    "cash_payment_total": 25000,
-                    "cash_base_total": 25000,
-                    "cash_shop_share": 12500,
+                    "cash_payment_total": 0,
+                    "cash_base_total": 0,
+                    "cash_shop_share": 0,
                     "nequi_base_total": 0,
                     "nequi_shop_share": 0,
                     "commission_rate": 0.5,
-                    "commission": 12500,
-                    "shop_share": 12500
+                    "commission": 0,
+                    "shop_share": 0
                 }
             ],
             "events": [
@@ -2912,8 +2891,14 @@
                     "cash_total": 25000,
                     "nequi_confirmed": 0,
                     "sales_count": 1
+                },
+                {
+                    "type": "reopened",
+                    "at": "2026-07-06T00:54:08"
                 }
-            ]
+            ],
+            "modified_at": "2026-07-06T00:54:03",
+            "reopened_at": "2026-07-06T00:54:08"
         },
         {
             "id": "6c209f4b26e6",
