@@ -1960,7 +1960,7 @@ export class App implements OnInit, OnDestroy {
       delete target.__moveAnimation;
       this.renderNow();
       this.loadData(true);
-    }, 280);
+    }, 380);
   }
 
   accountingBarberNequiSales(barberId: string): Sale[] {
@@ -2006,7 +2006,13 @@ export class App implements OnInit, OnDestroy {
   }
 
   accountingShopShare(): number {
-    return this.accountingTotal() - this.accountingPayrollTotal();
+    return (
+      this.accountingProductTotal() +
+      this.barbers.reduce(
+        (total, barber) => total + this.accountingBarberShopShare(barber.id),
+        0,
+      )
+    );
   }
 
   accountingProductSales(): Sale[] {

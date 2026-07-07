@@ -1204,6 +1204,8 @@ try {
                 }
                 $sale['status'] = $status;
                 $sale['reviewed_at'] = nowIso();
+            } elseif (array_key_exists('accounting_order', $payload) && !array_key_exists('service_name', $payload)) {
+                $sale['accounting_order'] = (int)$payload['accounting_order'];
             } else {
                 $amount = money($payload['amount'] ?? 0);
                 $payment = (string)($payload['payment_method'] ?? '');

@@ -4,40 +4,42 @@
 
 @keyframes accountingMoveUp {
   0% {
-    transform: translateY(0);
-    background: transparent;
+    transform: translateY(18px);
+    background: var(--move-highlight);
+    box-shadow: 0 8px 18px rgba(96, 166, 255, 0.18);
   }
-  25% {
-    transform: translateY(-14px);
+  65% {
     background: var(--move-highlight);
   }
   100% {
     transform: translateY(0);
     background: transparent;
+    box-shadow: none;
   }
 }
 
 @keyframes accountingMoveDown {
   0% {
-    transform: translateY(0);
-    background: transparent;
+    transform: translateY(-18px);
+    background: var(--move-highlight);
+    box-shadow: 0 -8px 18px rgba(96, 166, 255, 0.16);
   }
-  25% {
-    transform: translateY(14px);
+  65% {
     background: var(--move-highlight);
   }
   100% {
     transform: translateY(0);
     background: transparent;
+    box-shadow: none;
   }
 }
 
 tr.move-up,
 tr.move-down {
   position: relative;
-  z-index: 1;
-  animation-duration: 0.28s;
-  animation-timing-function: ease-out;
+  z-index: 2;
+  animation-duration: 0.36s;
+  animation-timing-function: cubic-bezier(0.2, 0.9, 0.2, 1);
   animation-fill-mode: both;
 }
 

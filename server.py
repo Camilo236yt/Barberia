@@ -2107,6 +2107,26 @@ class BarberiaHandler(BaseHTTPRequestHandler):
 
     def update_sale(self, sale_id):
         payload = self.read_json_body()
+        if "accounting_order" in payload and "service_name" not in payload:
+            with LOCK:
+                db = read_db()
+                sale = materialize_archived_sale(db, sale_id)
+                if not sale:
+                    self.send_json({"error": "Venta no encontrada."}, 404)
+                    return
+                branch_id = self.headers.get("X-Branch-Id")
+                if sale.get("branch_id") != branch_id:
+                    self.send_json({"error": "Esta venta pertenece a otra barberia."}, 403)
+                    return
+                try:
+                    sale["accounting_order"] = int(payload.get("accounting_order"))
+                except (TypeError, ValueError):
+                    raise ValueError("El orden del movimiento no es valido.")
+                write_db(db)
+            publish_data_change()
+            self.send_json({"sale": sale})
+            return
+
         service_name = validated_name(payload.get("service_name"), "servicio")
         amount = money_to_int(payload.get("amount"))
         if not amount:
@@ -2124,16 +2144,6 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             branch_id = self.headers.get("X-Branch-Id")
             if sale.get("branch_id") != branch_id:
                 self.send_json({"error": "Esta venta pertenece a otra barberia."}, 403)
-                return
-
-            if list(payload.keys()) == ["accounting_order"]:
-                order_value = payload.get("accounting_order")
-                if order_value is None or not isinstance(order_value, int):
-                    raise ValueError("El orden debe ser un número entero.")
-                sale["accounting_order"] = order_value
-                write_db(db)
-                publish_data_change()
-                self.send_json({"sale": sale})
                 return
 
             is_product = sale.get("sale_kind") == "product" or not sale.get("barber_id")
