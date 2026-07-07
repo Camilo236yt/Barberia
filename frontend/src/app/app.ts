@@ -200,7 +200,7 @@ interface CalendarDay {
   selector: 'app-root',
   imports: [CommonModule, FormsModule],
   templateUrl: './app.html',
-  styleUrl: './app.css',
+  styleUrls: ['./app.css'],
 })
 export class App implements OnInit, OnDestroy {
   branches: Branch[] = [];
