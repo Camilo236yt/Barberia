@@ -1,0 +1,62 @@
+:root {
+  --move-highlight: rgba(96, 166, 255, 0.12);
+}
+
+@keyframes accountingMoveUp {
+  0% {
+    transform: translateY(0);
+    background: transparent;
+  }
+  30% {
+    transform: translateY(-8px);
+    background: var(--move-highlight);
+  }
+  100% {
+    transform: translateY(0);
+    background: transparent;
+  }
+}
+
+@keyframes accountingMoveDown {
+  0% {
+    transform: translateY(0);
+    background: transparent;
+  }
+  30% {
+    transform: translateY(8px);
+    background: var(--move-highlight);
+  }
+  100% {
+    transform: translateY(0);
+    background: transparent;
+  }
+}
+
+tr.move-up,
+tr.move-down {
+  animation-duration: 0.28s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
+
+tr.move-up {
+  animation-name: accountingMoveUp;
+}
+
+tr.move-down {
+  animation-name: accountingMoveDown;
+}
+
+.table-wrap table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.table-wrap td,
+.table-wrap th {
+  padding: 12px 14px;
+}
+
+.table-wrap tr:not(:last-child) {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}

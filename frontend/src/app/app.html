@@ -1259,7 +1259,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let sale of salesList; let i = index; trackBy: trackById">
+        <tr *ngFor="let sale of salesList; let i = index; trackBy: trackById" [class.move-up]="sale.__moveAnimation === 'up'" [class.move-down]="sale.__moveAnimation === 'down'">
           <td data-label="Orden" *ngIf="actionContext === 'accounting'">
             <button class="small-button" type="button" (click)="moveAccountingSale(salesList, i, -1)" [disabled]="i === 0">↑</button>
             <button class="small-button" type="button" (click)="moveAccountingSale(salesList, i, 1)" [disabled]="i === salesList.length - 1">↓</button>

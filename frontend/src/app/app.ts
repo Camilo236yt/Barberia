@@ -29,6 +29,8 @@ interface ServiceItem {
   branch_id: string;
 }
 
+type MoveDirection = 'up' | 'down';
+
 interface Sale {
   id: string;
   created_at: string;
@@ -51,6 +53,7 @@ interface Sale {
   reviewed_at?: string;
   client_request_id?: string;
   accounting_order?: number;
+  __moveAnimation?: MoveDirection;
 }
 
 interface PendingOfflineSale {
@@ -1930,19 +1933,34 @@ export class App implements OnInit, OnDestroy {
 
     current.accounting_order = targetOrder;
     target.accounting_order = currentOrder;
+    current.__moveAnimation = direction === -1 ? 'up' : 'down';
+    target.__moveAnimation = direction === -1 ? 'down' : 'up';
+    this.renderNow();
 
-    await Promise.all([
-      this.api(`/api/sales/${current.id}`, {
-        method: 'POST',
-        body: JSON.stringify({ accounting_order: current.accounting_order }),
-      }),
-      this.api(`/api/sales/${target.id}`, {
-        method: 'POST',
-        body: JSON.stringify({ accounting_order: target.accounting_order }),
-      }),
-    ]);
+    try {
+      await Promise.all([
+        this.api(`/api/sales/${current.id}`, {
+          method: 'POST',
+          body: JSON.stringify({ accounting_order: current.accounting_order }),
+        }),
+        this.api(`/api/sales/${target.id}`, {
+          method: 'POST',
+          body: JSON.stringify({ accounting_order: target.accounting_order }),
+        }),
+      ]);
+    } catch (error) {
+      delete current.__moveAnimation;
+      delete target.__moveAnimation;
+      this.renderNow();
+      throw error;
+    }
 
-    await this.loadData(true);
+    window.setTimeout(() => {
+      delete current.__moveAnimation;
+      delete target.__moveAnimation;
+      this.renderNow();
+      this.loadData(true);
+    }, 280);
   }
 
   accountingBarberNequiSales(barberId: string): Sale[] {
