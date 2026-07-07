@@ -1247,6 +1247,7 @@
     <table>
       <thead>
         <tr>
+          <th *ngIf="actionContext === 'accounting'">Orden</th>
           <th>Fecha / hora</th>
           <th *ngIf="showBranch">Sede</th>
           <th>Responsable</th>
@@ -1258,7 +1259,11 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let sale of salesList; trackBy: trackById">
+        <tr *ngFor="let sale of salesList; let i = index; trackBy: trackById">
+          <td data-label="Orden" *ngIf="actionContext === 'accounting'">
+            <button class="small-button" type="button" (click)="moveAccountingSale(salesList, i, -1)" [disabled]="i === 0">↑</button>
+            <button class="small-button" type="button" (click)="moveAccountingSale(salesList, i, 1)" [disabled]="i === salesList.length - 1">↓</button>
+          </td>
           <td data-label="Fecha">{{ saleDay(sale) }} · {{ timeOnly(sale.created_at) }}</td>
           <td data-label="Sede" *ngIf="showBranch">{{ sale.branch_name }}</td>
           <td data-label="Responsable">{{ saleResponsibleLabel(sale) }}</td>

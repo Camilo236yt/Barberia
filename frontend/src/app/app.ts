@@ -50,6 +50,7 @@ interface Sale {
   status: SaleStatus;
   reviewed_at?: string;
   client_request_id?: string;
+  accounting_order?: number;
 }
 
 interface PendingOfflineSale {
@@ -1574,6 +1575,16 @@ export class App implements OnInit, OnDestroy {
 
   accountingSales(): Sale[] {
     const sales = [...this.accountingAllSales()].sort((left, right) => {
+      const leftOrder = left.accounting_order;
+      const rightOrder = right.accounting_order;
+      if (leftOrder != null && rightOrder != null) {
+        const byOrder = leftOrder - rightOrder;
+        if (byOrder) return byOrder;
+      } else if (leftOrder != null) {
+        return -1;
+      } else if (rightOrder != null) {
+        return 1;
+      }
       const byTime = String(left.created_at || '').localeCompare(String(right.created_at || ''));
       return byTime || String(left.id || '').localeCompare(String(right.id || ''));
     });
@@ -1901,6 +1912,37 @@ export class App implements OnInit, OnDestroy {
       (total, sale) => total + Number(sale.amount || 0),
       0,
     );
+  }
+
+  async moveAccountingSale(salesList: Sale[], index: number, direction: -1 | 1): Promise<void> {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= salesList.length) return;
+
+    const sales = salesList.map((sale, idx) => ({
+      sale,
+      order: sale.accounting_order != null ? sale.accounting_order : idx,
+    }));
+
+    const current = sales[index].sale;
+    const target = sales[targetIndex].sale;
+    const currentOrder = sales[index].order;
+    const targetOrder = sales[targetIndex].order;
+
+    current.accounting_order = targetOrder;
+    target.accounting_order = currentOrder;
+
+    await Promise.all([
+      this.api(`/api/sales/${current.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ accounting_order: current.accounting_order }),
+      }),
+      this.api(`/api/sales/${target.id}`, {
+        method: 'POST',
+        body: JSON.stringify({ accounting_order: target.accounting_order }),
+      }),
+    ]);
+
+    await this.loadData(true);
   }
 
   accountingBarberNequiSales(barberId: string): Sale[] {

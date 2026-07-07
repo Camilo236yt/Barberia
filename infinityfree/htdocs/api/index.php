@@ -37,6 +37,59 @@ function requestBody(): array
     return $decoded;
 }
 
+function loadMigrationPayload(): array
+{
+    if (isset($_FILES['migration_file']) && is_array($_FILES['migration_file'])) {
+        $file = $_FILES['migration_file'];
+        $tmpName = (string)($file['tmp_name'] ?? '');
+        $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_OK && $tmpName !== '' && is_file($tmpName)) {
+            $raw = file_get_contents($tmpName);
+            if ($raw === false) {
+                throw new HttpError('No se pudo leer el archivo de migración subido.', 400);
+            }
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                throw new HttpError('El archivo de migración subido no es válido.', 400);
+            }
+            return $decoded;
+        }
+    }
+
+    if (isset($_POST['migration_data']) && is_string($_POST['migration_data'])) {
+        $decoded = json_decode((string)$_POST['migration_data'], true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+        throw new HttpError('El contenido de migración enviado no es válido.', 400);
+    }
+
+    $raw = file_get_contents('php://input');
+    if ($raw !== false && trim($raw) !== '') {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+        throw new HttpError('El payload de migración enviado no es válido.', 400);
+    }
+
+    $file = __DIR__ . '/migration-data.json';
+    if (!is_file($file)) {
+        throw new HttpError('No se encontró api/migration-data.json y tampoco se recibió un archivo de migración.', 400);
+    }
+
+    $raw = file_get_contents($file);
+    if ($raw === false) {
+        throw new HttpError('No se pudo leer api/migration-data.json.', 400);
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        throw new HttpError('El archivo de migración no es válido.', 400);
+    }
+    return $decoded;
+}
+
 function config(): array
 {
     static $config;
@@ -727,14 +780,7 @@ try {
         if ($provided === '' || !hash_equals((string)config()['IMPORT_SECRET'], $provided)) {
             throw new HttpError('Clave de importación incorrecta.', 403);
         }
-        $file = __DIR__ . '/migration-data.json';
-        if (!is_file($file)) {
-            throw new HttpError('No se encontró api/migration-data.json.');
-        }
-        $incoming = json_decode((string)file_get_contents($file), true);
-        if (!is_array($incoming)) {
-            throw new HttpError('El archivo de migración no es válido.');
-        }
+        $incoming = loadMigrationPayload();
         $result = mutateState(function (array &$state) use ($incoming): array {
             foreach (['branches', 'barbers', 'services', 'sales', 'closures', 'expenses'] as $key) {
                 $state[$key] = mergeById($state[$key] ?? [], $incoming[$key] ?? []);
@@ -748,7 +794,10 @@ try {
                 'expenses' => count($state['expenses']),
             ];
         });
-        $result['migration_file_deleted'] = @unlink($file);
+        $file = __DIR__ . '/migration-data.json';
+        if (is_file($file) && empty($_FILES['migration_file'])) {
+            $result['migration_file_deleted'] = @unlink($file);
+        }
         jsonResponse($result);
     }
 

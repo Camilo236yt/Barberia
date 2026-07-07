@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "counts": {
+    "branches": 2,
+    "barbers": 6,
+    "services": 10,
+    "sales": 130,
+    "closures": 5,
+    "expenses": 3
+  }
+}

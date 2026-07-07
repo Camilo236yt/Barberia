@@ -2092,6 +2092,7 @@ class BarberiaHandler(BaseHTTPRequestHandler):
                 "proof_note": (payload.get("proof_note") or "").strip(),
                 "client_name": (payload.get("client_name") or "").strip(),
                 "status": "confirmed" if payment_method == "cash" else "pending_review",
+                "accounting_order": max((int(item.get("accounting_order", 0)) for item in db["sales"] if item.get("branch_id") == branch["id"] and item.get("created_at", "").startswith(sale_date)), default=-1) + 1,
             }
             db["sales"].insert(0, sale)
             refresh_closure_summary(db, sale_date, branch)
@@ -2123,6 +2124,16 @@ class BarberiaHandler(BaseHTTPRequestHandler):
             branch_id = self.headers.get("X-Branch-Id")
             if sale.get("branch_id") != branch_id:
                 self.send_json({"error": "Esta venta pertenece a otra barberia."}, 403)
+                return
+
+            if list(payload.keys()) == ["accounting_order"]:
+                order_value = payload.get("accounting_order")
+                if order_value is None or not isinstance(order_value, int):
+                    raise ValueError("El orden debe ser un número entero.")
+                sale["accounting_order"] = order_value
+                write_db(db)
+                publish_data_change()
+                self.send_json({"sale": sale})
                 return
 
             is_product = sale.get("sale_kind") == "product" or not sale.get("barber_id")

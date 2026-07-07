@@ -70,11 +70,14 @@
       Esta operación combina la información por identificador, por lo que no
       duplica ventas, cierres ni gastos.
     </p>
-    <form
-      method="post"
-      action="/api/migrar-datos"
-      onsubmit="return confirm('¿Importar ahora todos los datos anteriores?')"
-    >
+    <form id="importForm" method="post" action="/api/migrar-datos" enctype="multipart/form-data">
+      <label for="migrationFile">Archivo de migración JSON (opcional)</label>
+      <input
+        id="migrationFile"
+        name="migration_file"
+        type="file"
+        accept="application/json,.json"
+      >
       <label for="secret">Clave de importación</label>
       <input
         id="secret"
@@ -83,12 +86,64 @@
         autocomplete="off"
         required
       >
-      <button type="submit">Importar todos los datos</button>
+      <button id="submitBtn" type="submit">Importar todos los datos</button>
     </form>
+    <div id="result" role="status" aria-live="polite"></div>
     <p>
-      Al terminar, el navegador mostrará el número de ventas, cierres y gastos
-      importados.
+      Si no subes un archivo, el servidor intentará usar api/migration-data.json
+      si está presente. Al terminar, el navegador mostrará el número de ventas,
+      cierres y gastos importados.
     </p>
   </main>
+  <script>
+    const form = document.getElementById('importForm');
+    const result = document.getElementById('result');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!confirm('¿Importar ahora todos los datos anteriores?')) {
+        return;
+      }
+
+      const formData = new FormData(form);
+      result.className = '';
+      result.textContent = 'Importando...';
+      submitBtn.disabled = true;
+
+      try {
+        const response = await fetch('/api/migrar-datos', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        let payload;
+        if (contentType.includes('application/json')) {
+          payload = await response.json();
+        } else {
+          payload = { message: await response.text() };
+        }
+
+        if (!response.ok) {
+          result.className = 'error';
+          result.textContent = payload.message || 'La importación falló.';
+        } else {
+          result.className = 'ok';
+          result.textContent = [
+            'Importación completada.',
+            `Ventas: ${payload.sales ?? 0}`,
+            `Cierres: ${payload.closures ?? 0}`,
+            `Gastos: ${payload.expenses ?? 0}`,
+          ].join('\n');
+        }
+      } catch (error) {
+        result.className = 'error';
+        result.textContent = error instanceof Error ? error.message : 'No se pudo completar la importación.';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>

@@ -1,0 +1,23 @@
+{
+  "source": "C:\\Users\\Chiqui-PC V2\\OneDrive\\Barberia",
+  "output": "C:\\Users\\Chiqui-PC V2\\OneDrive\\Barberia\\infinityfree\\htdocs\\api\\migration-data.json",
+  "counts": {
+    "branches": 2,
+    "barbers": 6,
+    "services": 10,
+    "sales": 130,
+    "closures": 5,
+    "expenses": 3,
+    "proofs_copied": 67,
+    "proofs_missing": 0
+  },
+  "sales_by_branch": {
+    "barberia-1": 64,
+    "barberia-2": 66
+  },
+  "confirmed_totals_by_branch": {
+    "barberia-1": 1709000,
+    "barberia-2": 1887000
+  },
+  "missing_proofs": []
+}
