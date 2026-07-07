@@ -62,3 +62,136 @@ tr.move-down {
 .table-wrap tr:not(:last-child) {
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
+
+:root {
+  --motion-pop: cubic-bezier(.2, .9, .2, 1);
+  --motion-soft: cubic-bezier(.22, .61, .36, 1);
+}
+
+@keyframes viewFadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(.992);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes itemPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes softPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(212, 173, 79, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(212, 173, 79, .12);
+  }
+}
+
+.view.active,
+.branch-gate-card,
+.admin-shell {
+  animation: viewFadeSlide .34s var(--motion-soft) both;
+}
+
+.tool-panel,
+.kpi-card,
+.activity-item,
+.review-item,
+.closure-item,
+.barber-total-card,
+.editable-row,
+.expense-list article,
+.service-button,
+.barber-choice-grid button,
+.calendar-day,
+.accounting-calendar button {
+  animation: itemPopIn .26s var(--motion-pop) both;
+}
+
+.activity-item,
+.review-item,
+.closure-item,
+.editable-row,
+.expense-list article,
+.service-button,
+.barber-choice-grid button,
+.accounting-calendar button,
+.nav-sidebar button,
+.sidebar-nav button,
+.primary-button,
+.secondary-button,
+.small-button,
+.quick-sale,
+.branch-switcher {
+  transition:
+    transform .18s var(--motion-pop),
+    box-shadow .18s ease,
+    border-color .18s ease,
+    background-color .18s ease,
+    opacity .18s ease;
+}
+
+.activity-item:hover,
+.review-item:hover,
+.closure-item:hover,
+.editable-row:hover,
+.expense-list article:hover,
+.service-button:hover,
+.barber-choice-grid button:hover,
+.accounting-calendar button:not(:disabled):hover,
+.primary-button:hover,
+.secondary-button:hover,
+.small-button:hover,
+.quick-sale:hover,
+.branch-switcher:hover {
+  transform: translateY(-2px);
+}
+
+.primary-button:active,
+.secondary-button:active,
+.small-button:active,
+.quick-sale:active,
+.service-button:active,
+.barber-choice-grid button:active,
+.accounting-calendar button:not(:disabled):active {
+  transform: translateY(1px) scale(.99);
+}
+
+.service-button.active,
+.barber-choice-grid button.active,
+.accounting-barber-tabs button.active,
+.segmented .segment.active {
+  animation: softPulse .55s ease both;
+}
+
+.backup-progress-track span,
+.bar-track span,
+.horizontal-chart i {
+  transition: width .42s var(--motion-soft), height .42s var(--motion-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .001ms !important;
+  }
+}
