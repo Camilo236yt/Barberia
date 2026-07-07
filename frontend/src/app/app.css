@@ -1,5 +1,5 @@
 :root {
-  --move-highlight: rgba(96, 166, 255, 0.12);
+  --move-highlight: rgba(96, 166, 255, 0.14);
 }
 
 @keyframes accountingMoveUp {
@@ -7,8 +7,8 @@
     transform: translateY(0);
     background: transparent;
   }
-  30% {
-    transform: translateY(-8px);
+  25% {
+    transform: translateY(-14px);
     background: var(--move-highlight);
   }
   100% {
@@ -22,8 +22,8 @@
     transform: translateY(0);
     background: transparent;
   }
-  30% {
-    transform: translateY(8px);
+  25% {
+    transform: translateY(14px);
     background: var(--move-highlight);
   }
   100% {
@@ -34,9 +34,11 @@
 
 tr.move-up,
 tr.move-down {
+  position: relative;
+  z-index: 1;
   animation-duration: 0.28s;
   animation-timing-function: ease-out;
-  animation-fill-mode: forwards;
+  animation-fill-mode: both;
 }
 
 tr.move-up {
