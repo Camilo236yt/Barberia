@@ -20,7 +20,7 @@ No publiques ni envíes este token por chat. Agrégalo en
 ```php
 'GITHUB_REPOSITORY' => 'Camilo236yt/Barberia',
 'GITHUB_HISTORY_BRANCH' => 'historial-datos',
-'GITHUB_TOKEN' => 'AQUI_VA_EL_TOKEN_FINE_GRAINED',
+'GITHUB_TOKEN' => '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',
 ```
 
 Después vuelve a subir `config.php`. El botón **Subir datos de hoy** guardará el

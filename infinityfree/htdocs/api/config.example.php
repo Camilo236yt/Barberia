@@ -8,7 +8,7 @@ return [
     'IMPORT_SECRET' => 'CAMBIA_POR_OTRO_TOKEN_LARGO_Y_DIFERENTE',
     'GITHUB_REPOSITORY' => 'Camilo236yt/Barberia',
     'GITHUB_HISTORY_BRANCH' => 'historial-datos',
-    'GITHUB_TOKEN' => 'CAMBIA_POR_TOKEN_FINE_GRAINED_DE_GITHUB',
+    'GITHUB_TOKEN' => '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',
     'MAX_DEVICES' => 10,
     'TIMEZONE' => 'America/Bogota',
 ];
