@@ -5118,7 +5118,7 @@
             "branch_id": "barberia-2",
             "branch_name": "Barbería de Abajo",
             "closed_at": "2026-07-08T22:53:14",
-            "status": "closed",
+            "status": "reopened",
             "counted_cash": 0,
             "expected_cash": 215000,
             "cash_difference": -215000,
@@ -5193,8 +5193,13 @@
                     "cash_total": 215000,
                     "nequi_confirmed": 150000,
                     "sales_count": 14
+                },
+                {
+                    "type": "reopened",
+                    "at": "2026-07-08T22:53:35"
                 }
-            ]
+            ],
+            "reopened_at": "2026-07-08T22:53:35"
         },
         {
             "id": "4ce669124f35",
