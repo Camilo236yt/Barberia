@@ -2,7 +2,7 @@
     "version": 1,
     "month": "2026-07",
     "date": "2026-07-08",
-    "generated_at": "2026-07-08T22:52:53",
+    "generated_at": "2026-07-08T22:53:14",
     "branches": [
         {
             "id": "barberia-1",
@@ -495,6 +495,91 @@
             "status": "confirmed"
         }
     ],
-    "closures": [],
+    "closures": [
+        {
+            "id": "2f65f0ca8d0f",
+            "date": "2026-07-08",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "closed_at": "2026-07-08T22:53:14",
+            "status": "closed",
+            "counted_cash": 0,
+            "expected_cash": 215000,
+            "cash_difference": -215000,
+            "total_confirmed": 365000,
+            "cash_total": 215000,
+            "nequi_confirmed": 150000,
+            "nequi_pending": 0,
+            "sales_count": 14,
+            "pending_nequi_count": 0,
+            "commission_rate": 0.5,
+            "barbers": [
+                {
+                    "barber_id": "omar",
+                    "barber_name": "Omar",
+                    "sales_count": 4,
+                    "total": 90000,
+                    "base_total": 90000,
+                    "tip_total": 0,
+                    "nequi_total": 25000,
+                    "cash_payment_total": 65000,
+                    "cash_base_total": 65000,
+                    "cash_shop_share": 26000,
+                    "nequi_base_total": 25000,
+                    "nequi_shop_share": 10000,
+                    "commission_rate": 0.59999999999999997779553950749686919152736663818359375,
+                    "commission": 54000,
+                    "shop_share": 36000
+                },
+                {
+                    "barber_id": "randy",
+                    "barber_name": "Randy",
+                    "sales_count": 0,
+                    "total": 0,
+                    "base_total": 0,
+                    "tip_total": 0,
+                    "nequi_total": 0,
+                    "cash_payment_total": 0,
+                    "cash_base_total": 0,
+                    "cash_shop_share": 0,
+                    "nequi_base_total": 0,
+                    "nequi_shop_share": 0,
+                    "commission_rate": 0.5,
+                    "commission": 0,
+                    "shop_share": 0
+                },
+                {
+                    "barber_id": "juan",
+                    "barber_name": "Juan",
+                    "sales_count": 10,
+                    "total": 275000,
+                    "base_total": 275000,
+                    "tip_total": 0,
+                    "nequi_total": 125000,
+                    "cash_payment_total": 150000,
+                    "cash_base_total": 150000,
+                    "cash_shop_share": 75000,
+                    "nequi_base_total": 125000,
+                    "nequi_shop_share": 62500,
+                    "commission_rate": 0.5,
+                    "commission": 137500,
+                    "shop_share": 137500
+                }
+            ],
+            "events": [
+                {
+                    "type": "closed",
+                    "at": "2026-07-08T22:53:14",
+                    "counted_cash": 0,
+                    "expected_cash": 215000,
+                    "cash_difference": -215000,
+                    "total_confirmed": 365000,
+                    "cash_total": 215000,
+                    "nequi_confirmed": 150000,
+                    "sales_count": 14
+                }
+            ]
+        }
+    ],
     "expenses": []
 }
