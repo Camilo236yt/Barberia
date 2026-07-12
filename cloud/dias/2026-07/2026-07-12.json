@@ -1,0 +1,345 @@
+{
+    "version": 1,
+    "month": "2026-07",
+    "date": "2026-07-12",
+    "generated_at": "2026-07-12T15:03:42",
+    "branches": [
+        {
+            "id": "barberia-1",
+            "name": "Barbería de Arriba",
+            "active": true
+        },
+        {
+            "id": "barberia-2",
+            "name": "Barbería de Abajo",
+            "active": true
+        }
+    ],
+    "barbers": [
+        {
+            "id": "jose",
+            "name": "Jose",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5
+        },
+        {
+            "id": "luis",
+            "name": "Luís",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5
+        },
+        {
+            "id": "samuel",
+            "name": "Samuel",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5
+        },
+        {
+            "id": "omar",
+            "name": "Omar",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.59999999999999997779553950749686919152736663818359375
+        },
+        {
+            "id": "randy",
+            "name": "Randy",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.5
+        },
+        {
+            "id": "juan",
+            "name": "Juan",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.5
+        }
+    ],
+    "services": [
+        {
+            "id": "servicio-d1b9d2fdaa4c",
+            "name": "corte",
+            "price": 30000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-ebb302fc58a3",
+            "name": "Basico",
+            "price": 20000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "tijeras",
+            "name": "Corte con tijeras",
+            "price": 30000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "basico",
+            "name": "Corte básico",
+            "price": 25000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "barba",
+            "name": "Barba",
+            "price": 15000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "combo",
+            "name": "Corte y barba",
+            "price": 40000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "combo-tijeras",
+            "name": "Corte con tijeras y barba",
+            "price": 45000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "tijeras-b2",
+            "name": "Corte con tijeras",
+            "price": 35000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "basico-b2",
+            "name": "Corte básico",
+            "price": 20000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "barba-b2",
+            "name": "Barba",
+            "price": 15000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "combo-b2",
+            "name": "Corte y barba",
+            "price": 40000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "combo-tijeras-b2",
+            "name": "Corte con tijeras y barba",
+            "price": 40000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-99959520",
+            "name": "Corte",
+            "price": 25000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-2c2520d7",
+            "name": "Cortes 2",
+            "price": 50000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-7b443554",
+            "name": "Cortee",
+            "price": 23000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-82aaf0e2",
+            "name": "Corte basico",
+            "price": 20000,
+            "branch_id": "barberia-2"
+        }
+    ],
+    "settings": {
+        "commission_rate": 0.5,
+        "currency": "COP",
+        "business_whatsapp_country_code": "57",
+        "catalog_version": 3
+    },
+    "sales": [
+        {
+            "id": "bb169bc8c700",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-f975fdcf-7a7b-48ad-84a4-f08c2f136606",
+            "created_at": "2026-07-12T12:30:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "product",
+            "barber_id": null,
+            "barber_name": "Barbería · Nevera",
+            "service_id": "nevera",
+            "service_name": "Gaseosa",
+            "amount": 3000,
+            "base_amount": 3000,
+            "listed_price": null,
+            "tip_amount": 0,
+            "payment_method": "cash",
+            "cash_amount": 3000,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "Fanny",
+            "status": "confirmed",
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": ""
+        },
+        {
+            "id": "b1733572f03c",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-767ed964-251a-470f-886c-504ad1294a70",
+            "created_at": "2026-07-12T12:30:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "product",
+            "barber_id": null,
+            "barber_name": "Barbería · Nevera",
+            "service_id": "nevera",
+            "service_name": "Gaseosa",
+            "amount": 3000,
+            "base_amount": 3000,
+            "listed_price": null,
+            "tip_amount": 0,
+            "payment_method": "cash",
+            "cash_amount": 3000,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": ""
+        },
+        {
+            "id": "9eb4b961e2cc",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-f5392240-7c12-4ca1-ad92-64f0cf8171fa",
+            "created_at": "2026-07-12T12:30:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "product",
+            "barber_id": null,
+            "barber_name": "Barbería · Nevera",
+            "service_id": "nevera",
+            "service_name": "Agua",
+            "amount": 2500,
+            "base_amount": 2500,
+            "listed_price": null,
+            "tip_amount": 0,
+            "payment_method": "cash",
+            "cash_amount": 2500,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": ""
+        },
+        {
+            "id": "161c235e9679",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-91704a66-1283-4b6b-abeb-82b7adc3477e",
+            "created_at": "2026-07-12T12:30:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "product",
+            "barber_id": null,
+            "barber_name": "Barbería · Nevera",
+            "service_id": "nevera",
+            "service_name": "Agua",
+            "amount": 2500,
+            "base_amount": 2500,
+            "listed_price": null,
+            "tip_amount": 0,
+            "payment_method": "cash",
+            "cash_amount": 2500,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": ""
+        },
+        {
+            "id": "787598628177",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-ab837164-27cb-4ac6-b4d3-596f5194627e",
+            "created_at": "2026-07-12T12:30:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "product",
+            "barber_id": null,
+            "barber_name": "Barbería · Nevera",
+            "service_id": "nevera",
+            "service_name": "Agua",
+            "amount": 2500,
+            "base_amount": 2500,
+            "listed_price": null,
+            "tip_amount": 0,
+            "payment_method": "cash",
+            "cash_amount": 2500,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": ""
+        },
+        {
+            "id": "4ac68697e1e9",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-f3ade59d-e3c0-401b-9d8a-df5eed834587",
+            "created_at": "2026-07-12T12:30:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "product",
+            "barber_id": null,
+            "barber_name": "Barbería · Nevera",
+            "service_id": "nevera",
+            "service_name": "Agua",
+            "amount": 2500,
+            "base_amount": 2500,
+            "listed_price": null,
+            "tip_amount": 0,
+            "payment_method": "cash",
+            "cash_amount": 2500,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": ""
+        },
+        {
+            "id": "aefa2d6936a3",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-b6888a86-dfe3-4401-9bac-afa51e7d7717",
+            "created_at": "2026-07-12T12:05:00",
+            "branch_id": "barberia-1",
+            "branch_name": "Barbería de Arriba",
+            "sale_kind": "product",
+            "barber_id": null,
+            "barber_name": "Barbería · Nevera",
+            "service_id": "nevera",
+            "service_name": "Gaseosa",
+            "amount": 5000,
+            "base_amount": 5000,
+            "listed_price": null,
+            "tip_amount": 0,
+            "payment_method": "cash",
+            "cash_amount": 5000,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": ""
+        }
+    ],
+    "closures": [],
+    "expenses": []
+}
