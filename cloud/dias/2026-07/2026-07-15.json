@@ -1,0 +1,316 @@
+{
+    "version": 1,
+    "month": "2026-07",
+    "date": "2026-07-15",
+    "generated_at": "2026-07-15T13:27:52",
+    "branches": [
+        {
+            "id": "barberia-1",
+            "name": "Barbería de Arriba",
+            "active": true
+        },
+        {
+            "id": "barberia-2",
+            "name": "Barbería de Abajo",
+            "active": true
+        }
+    ],
+    "barbers": [
+        {
+            "id": "barbero-3e9c67ea471c",
+            "name": "Jorge",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5,
+            "retired": false
+        },
+        {
+            "id": "luis",
+            "name": "Luís",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5,
+            "retired": false
+        },
+        {
+            "id": "samuel",
+            "name": "Samuel",
+            "active": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5,
+            "retired": false
+        },
+        {
+            "id": "omar",
+            "name": "Omar",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.59999999999999997779553950749686919152736663818359375,
+            "retired": false
+        },
+        {
+            "id": "randy",
+            "name": "Randy",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.5,
+            "retired": false
+        },
+        {
+            "id": "juan",
+            "name": "Juan",
+            "active": true,
+            "branch_id": "barberia-2",
+            "commission_rate": 0.5,
+            "retired": false
+        },
+        {
+            "id": "jose",
+            "name": "Jose",
+            "active": false,
+            "retired": true,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5
+        }
+    ],
+    "services": [
+        {
+            "id": "servicio-d1b9d2fdaa4c",
+            "name": "corte",
+            "price": 30000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-ebb302fc58a3",
+            "name": "Basico",
+            "price": 20000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "tijeras",
+            "name": "Corte con tijeras",
+            "price": 30000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "basico",
+            "name": "Corte básico",
+            "price": 25000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "barba",
+            "name": "Barba",
+            "price": 15000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "combo",
+            "name": "Corte y barba",
+            "price": 40000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "combo-tijeras",
+            "name": "Corte con tijeras y barba",
+            "price": 45000,
+            "branch_id": "barberia-1"
+        },
+        {
+            "id": "tijeras-b2",
+            "name": "Corte con tijeras",
+            "price": 35000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "basico-b2",
+            "name": "Corte básico",
+            "price": 20000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "barba-b2",
+            "name": "Barba",
+            "price": 15000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "combo-b2",
+            "name": "Corte y barba",
+            "price": 40000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "combo-tijeras-b2",
+            "name": "Corte con tijeras y barba",
+            "price": 40000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-99959520",
+            "name": "Corte",
+            "price": 25000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-2c2520d7",
+            "name": "Cortes 2",
+            "price": 50000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-7b443554",
+            "name": "Cortee",
+            "price": 23000,
+            "branch_id": "barberia-2"
+        },
+        {
+            "id": "servicio-82aaf0e2",
+            "name": "Corte basico",
+            "price": 20000,
+            "branch_id": "barberia-2"
+        }
+    ],
+    "settings": {
+        "commission_rate": 0.5,
+        "currency": "COP",
+        "business_whatsapp_country_code": "57",
+        "catalog_version": 3
+    },
+    "sales": [
+        {
+            "id": "436614913313",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-b5803d32-c1cd-41c1-b084-c2c16959f355",
+            "created_at": "2026-07-15T13:24:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "service",
+            "barber_id": "juan",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Juan",
+            "service_id": "servicio-99959520",
+            "service_name": "Corte",
+            "amount": 25000,
+            "base_amount": 25000,
+            "listed_price": 25000,
+            "tip_amount": 0,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "cash",
+            "cash_amount": 25000,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed"
+        },
+        {
+            "id": "edac35c64f5c",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-28a05ccd-31a1-4c16-b67a-e37f0c2a27d3",
+            "created_at": "2026-07-15T13:23:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "service",
+            "barber_id": "juan",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Juan",
+            "service_id": "servicio-99959520",
+            "service_name": "Corte",
+            "amount": 25000,
+            "base_amount": 25000,
+            "listed_price": 25000,
+            "tip_amount": 0,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "cash",
+            "cash_amount": 25000,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed"
+        },
+        {
+            "id": "5774db8774fc",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-e6f31d47-22c1-4b86-bad3-48d3db400774",
+            "created_at": "2026-07-15T13:23:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "service",
+            "barber_id": "randy",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Randy",
+            "service_id": "servicio-7b443554",
+            "service_name": "Cortee",
+            "amount": 23000,
+            "base_amount": 23000,
+            "listed_price": 23000,
+            "tip_amount": 0,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "nequi",
+            "cash_amount": 0,
+            "nequi_amount": 23000,
+            "proof_url": "/uploads/5774db8774fc.jpg",
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "reviewed_at": "2026-07-15T13:23:28"
+        },
+        {
+            "id": "0ae97bdd9554",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-9dc9e4ab-8b13-4b12-988d-0edc3062b193",
+            "created_at": "2026-07-15T13:22:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "service",
+            "barber_id": "randy",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Randy",
+            "service_id": "servicio-99959520",
+            "service_name": "Corte",
+            "amount": 25000,
+            "base_amount": 25000,
+            "listed_price": 25000,
+            "tip_amount": 0,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "nequi",
+            "cash_amount": 0,
+            "nequi_amount": 25000,
+            "proof_url": "/uploads/0ae97bdd9554.jpg",
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "reviewed_at": "2026-07-15T13:23:26"
+        },
+        {
+            "id": "13afd91a9cd2",
+            "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-b7126971-1121-4b50-afd7-92b0b6005e0e",
+            "created_at": "2026-07-15T13:22:00",
+            "branch_id": "barberia-2",
+            "branch_name": "Barbería de Abajo",
+            "sale_kind": "service",
+            "barber_id": "randy",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Randy",
+            "service_id": "servicio-99959520",
+            "service_name": "Corte",
+            "amount": 25000,
+            "base_amount": 25000,
+            "listed_price": 25000,
+            "tip_amount": 0,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "cash",
+            "cash_amount": 25000,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed"
+        }
+    ],
+    "closures": [],
+    "expenses": []
+}
