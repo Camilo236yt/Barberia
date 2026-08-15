@@ -33848,6 +33848,73 @@
     ],
     "closures": [
         {
+            "date": "2026-08-15",
+            "branch_id": "barberia-1",
+            "branch_name": "Barbería de Arriba",
+            "closed_at": "2026-08-15T00:05:50",
+            "status": "closed",
+            "counted_cash": 0,
+            "expected_cash": 0,
+            "cash_difference": 0,
+            "total_confirmed": 0,
+            "cash_total": 0,
+            "nequi_confirmed": 0,
+            "nequi_pending": 0,
+            "sales_count": 0,
+            "pending_nequi_count": 0,
+            "commission_rate": 0.5,
+            "barbers": [
+                {
+                    "barber_id": "barbero-1f7d198578ee",
+                    "barber_name": "Sebastián",
+                    "sales_count": 0,
+                    "total": 0,
+                    "base_total": 0,
+                    "tip_total": 0,
+                    "nequi_total": 0,
+                    "cash_payment_total": 0,
+                    "cash_base_total": 0,
+                    "cash_shop_share": 0,
+                    "nequi_base_total": 0,
+                    "nequi_shop_share": 0,
+                    "commission_rate": 0.5,
+                    "commission": 0,
+                    "shop_share": 0
+                },
+                {
+                    "barber_id": "samuel",
+                    "barber_name": "Samuel",
+                    "sales_count": 0,
+                    "total": 0,
+                    "base_total": 0,
+                    "tip_total": 0,
+                    "nequi_total": 0,
+                    "cash_payment_total": 0,
+                    "cash_base_total": 0,
+                    "cash_shop_share": 0,
+                    "nequi_base_total": 0,
+                    "nequi_shop_share": 0,
+                    "commission_rate": 0.5,
+                    "commission": 0,
+                    "shop_share": 0
+                }
+            ],
+            "id": "a2dad661693d",
+            "events": [
+                {
+                    "type": "closed",
+                    "at": "2026-08-15T00:05:50",
+                    "counted_cash": 0,
+                    "expected_cash": 0,
+                    "cash_difference": 0,
+                    "total_confirmed": 0,
+                    "cash_total": 0,
+                    "nequi_confirmed": 0,
+                    "sales_count": 0
+                }
+            ]
+        },
+        {
             "date": "2026-08-14",
             "branch_id": "barberia-1",
             "branch_name": "Barbería de Arriba",
@@ -34803,32 +34870,18 @@
     ],
     "expenses": [
         {
-            "id": "gasto-7907bc4a62d2",
+            "id": "gasto-72445f5047de",
             "date": "2026-08-03",
-            "created_at": "2026-08-14T22:16:21",
-            "branch_id": "barberia-1",
-            "description": "des",
-            "amount": 500,
-            "expense_type": "barber",
-            "barber_id": "samuel",
-            "barber_name": "Samuel",
-            "accounting_class": "barber_deduction",
-            "expense_category": "barber_deduction",
-            "payment_method": ""
-        },
-        {
-            "id": "gasto-d11ea7bfe9b3",
-            "date": "2026-08-03",
-            "created_at": "2026-08-14T22:09:25",
+            "created_at": "2026-08-15T00:03:35",
             "branch_id": "barberia-1",
             "description": "cuchillas y almuerzo",
-            "amount": 19000,
+            "amount": 17500,
             "expense_type": "barber",
+            "payment_method": "",
             "barber_id": "samuel",
             "barber_name": "Samuel",
             "accounting_class": "barber_deduction",
-            "expense_category": "barber_deduction",
-            "payment_method": ""
+            "expense_category": "barber_deduction"
         },
         {
             "id": "gasto-3a59bfd42e5e",
