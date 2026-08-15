@@ -2,7 +2,7 @@
     "version": 1,
     "month": "2026-07",
     "date": "2026-07-15",
-    "generated_at": "2026-07-15T21:16:27",
+    "generated_at": "2026-08-14T23:49:57",
     "branches": [
         {
             "id": "barberia-1",
@@ -17,16 +17,8 @@
     ],
     "barbers": [
         {
-            "id": "barbero-3e9c67ea471c",
-            "name": "Jorge",
-            "active": true,
-            "branch_id": "barberia-1",
-            "commission_rate": 0.5,
-            "retired": false
-        },
-        {
-            "id": "luis",
-            "name": "Luís",
+            "id": "barbero-1f7d198578ee",
+            "name": "Sebastián",
             "active": true,
             "branch_id": "barberia-1",
             "commission_rate": 0.5,
@@ -65,6 +57,33 @@
             "retired": false
         },
         {
+            "id": "barbero-ac23b4a563cd",
+            "name": "Juan(temporal)",
+            "active": false,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5,
+            "retired": true,
+            "retired_at": "2026-07-31T12:04:51"
+        },
+        {
+            "id": "luis",
+            "name": "Luís",
+            "active": false,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5,
+            "retired": true,
+            "retired_at": "2026-07-30T18:53:16"
+        },
+        {
+            "id": "barbero-3e9c67ea471c",
+            "name": "Jorge",
+            "active": false,
+            "branch_id": "barberia-1",
+            "commission_rate": 0.5,
+            "retired": true,
+            "retired_at": "2026-07-30T18:53:12"
+        },
+        {
             "id": "jose",
             "name": "Jose",
             "active": false,
@@ -74,6 +93,12 @@
         }
     ],
     "services": [
+        {
+            "id": "servicio-4f5a02cd0c73",
+            "name": "corte especial",
+            "price": 60000,
+            "branch_id": "barberia-1"
+        },
         {
             "id": "servicio-d1b9d2fdaa4c",
             "name": "corte",
@@ -175,9 +200,114 @@
         "commission_rate": 0.5,
         "currency": "COP",
         "business_whatsapp_country_code": "57",
-        "catalog_version": 3
+        "catalog_version": 3,
+        "weekly_payment_days_by_branch": {
+            "barberia-1": 7,
+            "barberia-2": 1
+        },
+        "weekly_payment_schedule_by_branch": {
+            "barberia-1": [
+                {
+                    "effective_date": "1970-01-01",
+                    "days": 7
+                }
+            ],
+            "barberia-2": [
+                {
+                    "effective_date": "1970-01-01",
+                    "days": 1
+                }
+            ]
+        },
+        "barber_payment_accrual_start_by_branch": {
+            "barberia-1": "2026-08-07",
+            "barberia-2": "2026-08-13"
+        }
     },
     "sales": [
+        {
+            "id": "48e60d8d63a0",
+            "client_request_id": null,
+            "created_at": "2026-07-15T11:43:00",
+            "branch_id": "barberia-1",
+            "branch_name": "Barbería de Arriba",
+            "sale_kind": "service",
+            "barber_id": "samuel",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Samuel",
+            "service_id": "basico",
+            "service_name": "Corte básico",
+            "amount": 30000,
+            "base_amount": 25000,
+            "listed_price": 25000,
+            "tip_amount": 5000,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "cash",
+            "cash_amount": 30000,
+            "nequi_amount": 0,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "accounting_order": 2
+        },
+        {
+            "id": "b11821506e8a",
+            "client_request_id": null,
+            "created_at": "2026-07-15T11:35:00",
+            "branch_id": "barberia-1",
+            "branch_name": "Barbería de Arriba",
+            "sale_kind": "service",
+            "barber_id": "samuel",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Samuel",
+            "service_id": "combo",
+            "service_name": "Corte y barba",
+            "amount": 40000,
+            "base_amount": 40000,
+            "listed_price": 40000,
+            "tip_amount": 0,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "nequi",
+            "cash_amount": 0,
+            "nequi_amount": 40000,
+            "proof_url": "/uploads/b11821506e8a.jpg",
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "reviewed_at": "2026-07-16T11:35:42",
+            "accounting_order": 10
+        },
+        {
+            "id": "84ddbe1632b2",
+            "client_request_id": null,
+            "created_at": "2026-07-15T11:35:00",
+            "branch_id": "barberia-1",
+            "branch_name": "Barbería de Arriba",
+            "sale_kind": "service",
+            "barber_id": "samuel",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Samuel",
+            "service_id": "basico",
+            "service_name": "Corte básico",
+            "amount": 25000,
+            "base_amount": 25000,
+            "listed_price": 25000,
+            "tip_amount": 0,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "nequi",
+            "cash_amount": 0,
+            "nequi_amount": 25000,
+            "proof_url": "/uploads/84ddbe1632b2.jpg",
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "reviewed_at": "2026-07-16T11:35:41",
+            "accounting_order": 0
+        },
         {
             "id": "9e89b55ea7d7",
             "client_request_id": "venta-a63ba86f-d394-4bb6-b5d8-0010c0e97922-cac1b1a5-320c-4d7f-a413-e6aeeb6be55d",
@@ -230,7 +360,8 @@
             "proof_note": "",
             "client_name": "",
             "status": "confirmed",
-            "reviewed_at": "2026-07-15T20:50:05"
+            "reviewed_at": "2026-07-15T20:50:05",
+            "accounting_order": 13
         },
         {
             "id": "6fa3a18b2ddc",
@@ -257,7 +388,8 @@
             "proof_note": "",
             "client_name": "",
             "status": "confirmed",
-            "reviewed_at": "2026-07-15T19:11:57"
+            "reviewed_at": "2026-07-15T19:11:57",
+            "accounting_order": 8
         },
         {
             "id": "55424e8868b6",
@@ -284,7 +416,8 @@
             "proof_note": "",
             "client_name": "",
             "status": "confirmed",
-            "reviewed_at": "2026-07-15T19:05:54"
+            "reviewed_at": "2026-07-15T19:05:54",
+            "accounting_order": 12
         },
         {
             "id": "a6280f760ae7",
@@ -310,7 +443,8 @@
             "proof_url": null,
             "proof_note": "",
             "client_name": "",
-            "status": "confirmed"
+            "status": "confirmed",
+            "accounting_order": 11
         },
         {
             "id": "38cf75e2855e",
@@ -337,7 +471,8 @@
             "proof_note": "",
             "client_name": "",
             "status": "confirmed",
-            "reviewed_at": "2026-07-15T18:47:28"
+            "reviewed_at": "2026-07-15T18:47:28",
+            "accounting_order": 7
         },
         {
             "id": "debec64f763f",
@@ -364,7 +499,8 @@
             "proof_note": "",
             "client_name": "",
             "status": "confirmed",
-            "reviewed_at": "2026-07-15T18:47:29"
+            "reviewed_at": "2026-07-15T18:47:29",
+            "accounting_order": 9
         },
         {
             "id": "adda7827ecec",
@@ -551,7 +687,8 @@
             "proof_url": null,
             "proof_note": "",
             "client_name": "",
-            "status": "confirmed"
+            "status": "confirmed",
+            "accounting_order": 6
         },
         {
             "id": "f75d6e70eebe",
@@ -578,33 +715,8 @@
             "proof_note": "",
             "client_name": "",
             "status": "confirmed",
-            "reviewed_at": "2026-07-15T16:47:11"
-        },
-        {
-            "id": "3062e7113048",
-            "client_request_id": "venta-6d9ba8ac-0ad5-47d8-aeef-97a0a85c1e48-10077e4d-90e1-427e-ab8f-5491fd6aba4c",
-            "created_at": "2026-07-15T16:46:00",
-            "branch_id": "barberia-1",
-            "branch_name": "Barbería de Arriba",
-            "sale_kind": "service",
-            "barber_id": "samuel",
-            "barber_commission_rate": 0.5,
-            "barber_name": "Samuel",
-            "service_id": "tijeras",
-            "service_name": "Corte con tijeras",
-            "amount": 30000,
-            "base_amount": 30000,
-            "listed_price": 30000,
-            "tip_amount": 0,
-            "tip_deduction_amount": 0,
-            "tip_deduction_note": "",
-            "payment_method": "cash",
-            "cash_amount": 30000,
-            "nequi_amount": 0,
-            "proof_url": null,
-            "proof_note": "Corte de Alejandro",
-            "client_name": "",
-            "status": "confirmed"
+            "reviewed_at": "2026-07-15T16:47:11",
+            "accounting_order": 1
         },
         {
             "id": "fc522809e4b2",
@@ -631,7 +743,8 @@
             "proof_note": "",
             "client_name": "",
             "status": "confirmed",
-            "reviewed_at": "2026-07-15T16:47:10"
+            "reviewed_at": "2026-07-15T16:47:10",
+            "accounting_order": 3
         },
         {
             "id": "d148bb20c80e",
@@ -657,7 +770,8 @@
             "proof_url": null,
             "proof_note": "",
             "client_name": "",
-            "status": "confirmed"
+            "status": "confirmed",
+            "accounting_order": 5
         },
         {
             "id": "b53b3f77a2cb",
@@ -683,7 +797,8 @@
             "proof_url": null,
             "proof_note": "",
             "client_name": "",
-            "status": "confirmed"
+            "status": "confirmed",
+            "accounting_order": 4
         },
         {
             "id": "60990cbe7077",

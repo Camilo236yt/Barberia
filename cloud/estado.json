@@ -33991,8 +33991,8 @@
             "date": "2026-07-08",
             "branch_id": "barberia-2",
             "branch_name": "Barbería de Abajo",
-            "closed_at": "2026-07-08T22:53:14",
-            "status": "reopened",
+            "closed_at": "2026-08-14T23:49:34",
+            "status": "closed",
             "counted_cash": 0,
             "expected_cash": 215000,
             "cash_difference": -215000,
@@ -34057,7 +34057,7 @@
                 }
             ],
             "id": "2f65f0ca8d0f",
-            "reopened_at": "2026-07-08T22:53:35",
+            "modified_at": "2026-08-14T23:49:34",
             "events": [
                 {
                     "type": "closed",
@@ -34073,6 +34073,11 @@
                 {
                     "type": "reopened",
                     "at": "2026-07-08T22:53:35"
+                },
+                {
+                    "type": "auto_closed",
+                    "at": "2026-08-14T23:49:34",
+                    "reason": "24_hours_without_changes"
                 }
             ]
         },
@@ -34080,8 +34085,8 @@
             "date": "2026-07-06",
             "branch_id": "barberia-1",
             "branch_name": "Barbería de Arriba",
-            "closed_at": "2026-07-06T01:27:10",
-            "status": "reopened",
+            "closed_at": "2026-08-14T23:49:34",
+            "status": "closed",
             "counted_cash": 0,
             "expected_cash": 150000,
             "cash_difference": -150000,
@@ -34146,8 +34151,7 @@
                 }
             ],
             "id": "4ce669124f35",
-            "reopened_at": "2026-07-06T01:27:23",
-            "modified_at": "2026-07-06T01:27:03",
+            "modified_at": "2026-08-14T23:49:34",
             "events": [
                 {
                     "type": "closed",
@@ -34178,6 +34182,11 @@
                 {
                     "type": "reopened",
                     "at": "2026-07-06T01:27:23"
+                },
+                {
+                    "type": "auto_closed",
+                    "at": "2026-08-14T23:49:34",
+                    "reason": "24_hours_without_changes"
                 }
             ]
         },
@@ -34701,8 +34710,8 @@
             "date": "2026-07-07",
             "branch_id": "barberia-1",
             "branch_name": "Barbería de Arriba",
-            "closed_at": "2026-07-07T00:13:14",
-            "status": "reopened",
+            "closed_at": "2026-08-14T23:49:34",
+            "status": "closed",
             "counted_cash": 0,
             "expected_cash": 25000,
             "cash_difference": -25000,
@@ -34767,8 +34776,7 @@
                 }
             ],
             "id": "c06ef9d153ee",
-            "reopened_at": "2026-07-07T00:13:53",
-            "modified_at": "2026-07-10T16:04:53",
+            "modified_at": "2026-08-14T23:49:34",
             "events": [
                 {
                     "type": "closed",
@@ -34784,6 +34792,11 @@
                 {
                     "type": "reopened",
                     "at": "2026-07-07T00:13:53"
+                },
+                {
+                    "type": "auto_closed",
+                    "at": "2026-08-14T23:49:34",
+                    "reason": "24_hours_without_changes"
                 }
             ]
         }
@@ -35232,74 +35245,6 @@
     },
     "barber_payments": [
         {
-            "id": "pago-barbero-b72469cd8cc2",
-            "date": "2026-08-09",
-            "created_at": "2026-08-14T22:46:01",
-            "branch_id": "barberia-1",
-            "barber_id": "barbero-1f7d198578ee",
-            "barber_name": "Sebastián",
-            "amount": 408000,
-            "payment_method": "cash",
-            "extra_amount": 0,
-            "payment_scope": "accrual",
-            "accrual_start_date": "2026-08-03",
-            "accrual_end_date": "2026-08-09",
-            "selected_dates": [
-                "2026-08-03",
-                "2026-08-04",
-                "2026-08-05",
-                "2026-08-06",
-                "2026-08-07",
-                "2026-08-08",
-                "2026-08-09"
-            ],
-            "covered_sale_ids": [
-                "122c8ac140c9",
-                "b4cfe6cf5da0",
-                "04c81b886fa1",
-                "dafbb9b4fa71",
-                "25a0ebc09335",
-                "8a486ff1dafb",
-                "bd9dba4a9158",
-                "afac6c7fe203",
-                "fe96bf39210d",
-                "38ae9ea092a7",
-                "2d4a07b69bb8",
-                "3e872d1a3467",
-                "f52313601a26",
-                "a0950b4c4bd8",
-                "939ef1a85df9",
-                "95aad3c960b0",
-                "e63f10d6827b",
-                "13538256f401",
-                "317773439c1a",
-                "0c5eaa1e695d",
-                "ad5e54fb1a54",
-                "146164ad7a8d",
-                "370436664e99",
-                "d0b58c78c6ef",
-                "187b23b058ac",
-                "8ae1c6e1afda",
-                "026cdd57c2b2",
-                "a253eca5682e",
-                "1bbd837b73bb",
-                "de14ffbce652",
-                "b0a0c20321da"
-            ],
-            "covered_deduction_ids": []
-        },
-        {
-            "id": "pago-barbero-ba48fcc87895",
-            "date": "2026-08-08",
-            "created_at": "2026-08-13T00:21:46",
-            "branch_id": "barberia-1",
-            "barber_id": "barbero-1f7d198578ee",
-            "barber_name": "Sebastián",
-            "amount": 142500,
-            "payment_method": "cash",
-            "extra_amount": 0
-        },
-        {
             "id": "pago-barbero-14567d536765",
             "date": "2026-08-12",
             "created_at": "2026-08-12T22:42:35",
@@ -35318,28 +35263,6 @@
             "barber_id": "samuel",
             "barber_name": "Samuel",
             "amount": 142500,
-            "payment_method": "nequi",
-            "extra_amount": 0
-        },
-        {
-            "id": "pago-barbero-ce4aa05ae0b2",
-            "date": "2026-08-04",
-            "created_at": "2026-08-05T23:21:24",
-            "branch_id": "barberia-1",
-            "barber_id": "samuel",
-            "barber_name": "Samuel",
-            "amount": 25000,
-            "payment_method": "nequi",
-            "extra_amount": 0
-        },
-        {
-            "id": "pago-barbero-9747c5926f18",
-            "date": "2026-08-05",
-            "created_at": "2026-08-05T23:09:19",
-            "branch_id": "barberia-1",
-            "barber_id": "barbero-1f7d198578ee",
-            "barber_name": "Sebastián",
-            "amount": 105000,
             "payment_method": "nequi",
             "extra_amount": 0
         }
