@@ -194,6 +194,33 @@
     ],
     "sales": [
         {
+            "id": "5c02bbc175c6",
+            "client_request_id": null,
+            "created_at": "2026-08-18T11:40:00",
+            "branch_id": "barberia-1",
+            "branch_name": "Barbería de Arriba",
+            "sale_kind": "service",
+            "barber_id": "barbero-1f7d198578ee",
+            "barber_commission_rate": 0.5,
+            "barber_name": "Sebastián",
+            "service_id": "tijeras",
+            "service_name": "Corte con tijeras",
+            "amount": 30000,
+            "base_amount": 30000,
+            "listed_price": 30000,
+            "tip_amount": 0,
+            "tip_deduction_amount": 0,
+            "tip_deduction_note": "",
+            "payment_method": "nequi",
+            "cash_amount": 0,
+            "nequi_amount": 30000,
+            "proof_url": null,
+            "proof_note": "",
+            "client_name": "",
+            "status": "confirmed",
+            "reviewed_at": "2026-08-19T11:41:40"
+        },
+        {
             "id": "50803125007f",
             "client_request_id": null,
             "created_at": "2026-08-18T11:38:00",
@@ -37080,7 +37107,7 @@
             "branch_id": "barberia-1",
             "branch_name": "Barbería de Arriba",
             "closed_at": "2026-08-19T11:40:39",
-            "status": "closed",
+            "status": "reopened",
             "counted_cash": 0,
             "expected_cash": 0,
             "cash_difference": 0,
@@ -37128,6 +37155,8 @@
                 }
             ],
             "id": "7fd043d7514b",
+            "reopened_at": "2026-08-19T17:49:19",
+            "modified_at": "2026-08-19T17:49:19",
             "events": [
                 {
                     "type": "closed",
@@ -37139,6 +37168,10 @@
                     "cash_total": 0,
                     "nequi_confirmed": 0,
                     "sales_count": 0
+                },
+                {
+                    "type": "reopened",
+                    "at": "2026-08-19T17:49:19"
                 }
             ]
         },
@@ -39682,6 +39715,36 @@
         }
     },
     "barber_payments": [
+        {
+            "id": "pago-barbero-3caeb16a4742",
+            "date": "2026-08-18",
+            "created_at": "2026-08-19T11:41:57",
+            "branch_id": "barberia-1",
+            "barber_id": "barbero-1f7d198578ee",
+            "barber_name": "Sebastián",
+            "amount": 60000,
+            "base_payment_amount": 60000,
+            "addition_amount": 0,
+            "addition_note": "",
+            "addition_entries": [],
+            "payment_method": "cash",
+            "cash_amount": 60000,
+            "nequi_amount": 0,
+            "extra_amount": 0,
+            "payment_scope": "accrual",
+            "accrual_start_date": "2026-08-18",
+            "accrual_end_date": "2026-08-18",
+            "selected_dates": [
+                "2026-08-18"
+            ],
+            "covered_sale_ids": [
+                "5c02bbc175c6",
+                "50803125007f",
+                "bdb42947aba1",
+                "e7b2e5a11bbb"
+            ],
+            "covered_deduction_ids": []
+        },
         {
             "id": "pago-barbero-d7d7fed6c2d8",
             "date": "2026-08-18",

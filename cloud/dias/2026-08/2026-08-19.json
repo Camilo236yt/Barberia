@@ -257,7 +257,7 @@
             "branch_id": "barberia-1",
             "branch_name": "Barbería de Arriba",
             "closed_at": "2026-08-19T11:40:39",
-            "status": "closed",
+            "status": "reopened",
             "counted_cash": 0,
             "expected_cash": 0,
             "cash_difference": 0,
@@ -305,6 +305,8 @@
                 }
             ],
             "id": "7fd043d7514b",
+            "reopened_at": "2026-08-19T17:49:19",
+            "modified_at": "2026-08-19T17:49:19",
             "events": [
                 {
                     "type": "closed",
@@ -316,6 +318,10 @@
                     "cash_total": 0,
                     "nequi_confirmed": 0,
                     "sales_count": 0
+                },
+                {
+                    "type": "reopened",
+                    "at": "2026-08-19T17:49:19"
                 }
             ]
         }
